@@ -81,7 +81,7 @@ const UserPage = () => {
   const tableRef = useRef(null);
   const chartContainerRef = useRef(null);
 
-  const API_URL = 'http://localhost:5008';
+  const API_URL = 'https://render-user-page.onrender.com';
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);

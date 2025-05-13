@@ -428,7 +428,7 @@ const AdminHome = () => {
     // Function declarations first - before any hooks that use them
     const loadDashboardData = async () => {
         try {
-            const response = await fetch('http://localhost:5008/api/products');
+            const response = await fetch('https://render-user-page.onrender.com/api/products');
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -442,7 +442,7 @@ const AdminHome = () => {
 
     const loadContactsData = async (retry = true) => {
         try {
-            const response = await fetch('http://localhost:5008/api/contacts');
+            const response = await fetch('https://render-user-page.onrender.com/api/contacts');
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -465,7 +465,7 @@ const AdminHome = () => {
 
     const loadUsersData = async (retry = true) => {
         try {
-            const response = await fetch('http://localhost:5008/api/users');
+            const response = await fetch('https://render-user-page.onrender.com/api/users');
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -488,7 +488,7 @@ const AdminHome = () => {
 
     const loadOrdersData = async (retry = true) => {
         try {
-            const response = await fetch('http://localhost:5008/api/orders/admin/all');
+            const response = await fetch('https://render-user-page.onrender.com/api/orders/admin/all');
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -516,7 +516,7 @@ const AdminHome = () => {
     // Function to load expense data
     const loadExpensesData = async (retry = true) => {
         try {
-            const response = await fetch('http://localhost:5008/api/expenses');
+            const response = await fetch('https://render-user-page.onrender.com/api/expenses');
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -792,7 +792,7 @@ const AdminHome = () => {
             
             // Try to get historical orders data first
             try {
-                const ordersResponse = await fetch(`http://localhost:5008/api/orders/admin/all?startDate=${startDate}&endDate=${endDate}`);
+                const ordersResponse = await fetch(`https://render-user-page.onrender.com/api/orders/admin/all?startDate=${startDate}&endDate=${endDate}`);
                 if (ordersResponse.ok) {
                     const ordersData = await ordersResponse.json();
                     if (ordersData.success && Array.isArray(ordersData.orders)) {
@@ -818,7 +818,7 @@ const AdminHome = () => {
             
             // Try to get historical users data
             try {
-                const usersResponse = await fetch(`http://localhost:5008/api/users`);
+                const usersResponse = await fetch(`https://render-user-page.onrender.com/api/users`);
                 if (usersResponse.ok) {
                     const usersData = await usersResponse.json();
                     if (Array.isArray(usersData)) {
@@ -1036,7 +1036,7 @@ const AdminHome = () => {
                 return;
             }
             
-            const response = await fetch("http://localhost:5008/api/tasks", {
+            const response = await fetch("https://render-user-page.onrender.com/api/tasks", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(newTask),
@@ -1062,7 +1062,7 @@ const AdminHome = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const deleteTask = async (id) => {
         try {
-            const response = await fetch(`http://localhost:5008/api/tasks/${id}`, { method: "DELETE" });
+            const response = await fetch(`https://render-user-page.onrender.com/api/tasks/${id}`, { method: "DELETE" });
             if (!response.ok) throw new Error("Failed to delete task");
             setPendingTasks((prev) => prev.filter((task) => task._id !== id));
         } catch (error) {
@@ -1073,7 +1073,7 @@ const AdminHome = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const updateTask = async (id, updatedData) => {
         try {
-            const response = await fetch(`http://localhost:5008/api/tasks/${id}`, {
+            const response = await fetch(`https://render-user-page.onrender.com/api/tasks/${id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(updatedData),
@@ -1091,7 +1091,7 @@ const AdminHome = () => {
     const loadPendingTasks = async () => {
         try {
             setTaskError(null);
-            const response = await fetch("http://localhost:5008/api/tasks");
+            const response = await fetch("https://render-user-page.onrender.com/api/tasks");
             if (!response.ok) throw new Error("Failed to fetch tasks");
             const data = await response.json();
             setPendingTasks(data);
@@ -1107,10 +1107,10 @@ const AdminHome = () => {
             setActivitiesError(null);
 
             const [tasksResponse, productsResponse, usersResponse, ordersResponse] = await Promise.all([
-                fetch("http://localhost:5008/api/tasks"),
-                fetch("http://localhost:5008/api/products"),
-                fetch("http://localhost:5008/api/users"),
-                fetch("http://localhost:5008/api/orders/admin/all"),
+                fetch("https://render-user-page.onrender.com/api/tasks"),
+                fetch("https://render-user-page.onrender.com/api/products"),
+                fetch("https://render-user-page.onrender.com/api/users"),
+                fetch("https://render-user-page.onrender.com/api/orders/admin/all"),
             ]);
 
             if (!tasksResponse.ok || !productsResponse.ok || !usersResponse.ok || !ordersResponse.ok) {
@@ -1173,7 +1173,7 @@ const AdminHome = () => {
 
     const loadLowStockProducts = async () => {
         try {
-            const response = await fetch("http://localhost:5008/api/products");
+            const response = await fetch("https://render-user-page.onrender.com/api/products");
             if (!response.ok) throw new Error("Failed to fetch products");
             const data = await response.json();
             const lowStock = data.filter(product => product.stock <= 10); // Adjust threshold as needed
@@ -1894,7 +1894,7 @@ const AdminHome = () => {
     // Add this function with the other data loading functions
     const loadEmployeesData = async (retry = true) => {
         try {
-            const response = await fetch('http://localhost:5008/api/employees');
+            const response = await fetch('https://render-user-page.onrender.com/api/employees');
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }

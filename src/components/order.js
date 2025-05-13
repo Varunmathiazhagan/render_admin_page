@@ -842,7 +842,7 @@ const AdminOrdersPage = () => {
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(true);
 
-  const API_URL = "http://localhost:5008";
+  const API_URL = "https://render-user-page.onrender.com";
 
   // Fetch orders from the server
   const fetchOrders = async () => {

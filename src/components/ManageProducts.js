@@ -57,7 +57,7 @@ const ManageProducts = () => {
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:5008/api/products");
+      const response = await fetch("https://render-user-page.onrender.com/api/products");
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       if (Array.isArray(data)) {
@@ -91,7 +91,7 @@ const ManageProducts = () => {
       }
 
       const response = await fetch(
-        `http://localhost:5008/api/admin/products/${editingProduct._id}`,
+        `https://render-user-page.onrender.com/api/admin/products/${editingProduct._id}`,
         {
           method: "PUT",
           body: form,
@@ -129,7 +129,7 @@ const ManageProducts = () => {
       }
 
       const response = await fetch(
-        "http://localhost:5008/api/admin/products",
+        "https://render-user-page.onrender.com/api/admin/products",
         {
           method: "POST",
           body: form,
@@ -207,7 +207,7 @@ const ManageProducts = () => {
       return;
     }
     try {
-      const response = await fetch(`http://localhost:5008/api/admin/products/${id}`, {
+      const response = await fetch(`https://render-user-page.onrender.com/api/admin/products/${id}`, {
         method: "DELETE",
       });
       const data = await response.json();

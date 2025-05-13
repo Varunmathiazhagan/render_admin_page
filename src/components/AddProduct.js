@@ -37,7 +37,7 @@ const AddProduct = () => {
       }
 
       // Update the endpoint to the correct one
-      const response = await fetch("http://localhost:5008/api/admin/products", {
+      const response = await fetch("https://render-user-page.onrender.com/api/admin/products", {
         method: "POST",
         body: form,
       });

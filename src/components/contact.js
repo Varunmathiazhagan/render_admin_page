@@ -79,7 +79,7 @@ const AdminContacts = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get("http://localhost:5008/api/contacts");
+      const response = await axios.get("https://render-user-page.onrender.com/api/contacts");
       setContacts(response.data);
       setFilteredContacts(response.data);
       setTotalPages(Math.ceil(response.data.length / ITEMS_PER_PAGE));

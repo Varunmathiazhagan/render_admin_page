@@ -14,9 +14,9 @@ ChartJS.register(
   Title
 );
 
-const API_URL = "http://localhost:5008/api/employees";
-const EXPENSE_API_URL = "http://localhost:5008/api/expenses";
-const ORDER_API_URL = "http://localhost:5008/api/orders/admin/all";
+const API_URL = "https://render-user-page.onrender.com/api/employees";
+const EXPENSE_API_URL = "https://render-user-page.onrender.com/api/expenses";
+const ORDER_API_URL = "https://render-user-page.onrender.com/api/orders/admin/all";
 
 const defaultForm = {
   name: "",

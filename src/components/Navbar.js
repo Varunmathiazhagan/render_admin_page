@@ -24,7 +24,7 @@ const Navbar = () => {
     let isMounted = true;
     const fetchNotifications = async () => {
       try {
-        const res = await fetch('http://localhost:5008/api/notifications');
+        const res = await fetch('https://render-user-page.onrender.com/api/notifications');
         if (!res.ok) throw new Error('Failed to fetch notifications');
         const data = await res.json();
         if (isMounted) {
