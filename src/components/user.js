@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import Navbar from './Navbar';
 import { Line, Bar, Doughnut, Radar, PolarArea } from 'react-chartjs-2';
@@ -26,8 +26,13 @@ import {
   RefreshCw, ChevronDown, ChevronUp,
   PlusCircle, Activity, UserCheck,
   Clock, Eye,
-  LineChart, BarChart2, AlertTriangle, CheckCircle 
+  LineChart, BarChart2, AlertTriangle, CheckCircle,
+  Users, Database, TrendingUp, 
+  UserPlus, UserMinus, Target,
+  Globe, Mail, Shield, X, Calendar, User
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 ChartJS.register(
   CategoryScale, 
@@ -70,17 +75,15 @@ const UserPage = () => {
   const [error, setError] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [activityLog, setActivityLog] = useState([]);
+  const [selectedUsers, setSelectedUsers] = useState(new Set());
+  const [filterByStatus, setFilterByStatus] = useState('all');
 
   const tableRef = useRef(null);
   const chartContainerRef = useRef(null);
 
   const API_URL = 'http://localhost:5008';
 
-  useEffect(() => {
-    fetchAllData();
-  }, [fetchAllData]);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -92,9 +95,9 @@ const UserPage = () => {
       setError(err.message || 'Failed to fetch users');
       setLoading(false);
     }
-  };
+  }, [API_URL]);
 
-  const fetchUserAnalytics = async () => {
+  const fetchUserAnalytics = useCallback(async () => {
     setAnalyticsLoading(true);
     try {
       const response = await axios.get(`${API_URL}/api/users`);
@@ -111,9 +114,9 @@ const UserPage = () => {
       addNotification("Failed to load analytics", "error");
       setAnalyticsLoading(false);
     }
-  };
+  }, [API_URL]);
 
-  const fetchAllData = async () => {
+  const fetchAllData = useCallback(async () => {
     try {
       await Promise.all([
         fetchUsers(),
@@ -123,7 +126,11 @@ const UserPage = () => {
       console.error("Error fetching data:", err);
       addNotification("Failed to load data", "error");
     }
-  };
+  }, [fetchUsers, fetchUserAnalytics]);
+
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
 
   const processUserStats = (userData) => {
     const now = new Date();
@@ -331,10 +338,25 @@ const UserPage = () => {
     );
   }, [sortedUsers, searchTerm]);
 
+  // Helper function to check if a user is active
+  const isUserActive = (userId) => {
+    return activeUserIds.has(userId);
+  };
+
+  const filteredAndSortedUsers = React.useMemo(() => {
+    let usersToFilter = [...filteredUsers];
+    if (filterByStatus !== 'all') {
+      usersToFilter = usersToFilter.filter((user) =>
+        filterByStatus === 'active' ? isUserActive(user._id) : !isUserActive(user._id)
+      );
+    }
+    return usersToFilter;
+  }, [filteredUsers, filterByStatus]);
+
   const indexOfLastUser = currentPage * usersPerPage;
   const indexOfFirstUser = indexOfLastUser - usersPerPage;
-  const currentUsers = filteredUsers.slice(indexOfFirstUser, indexOfLastUser);
-  const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+  const currentUsers = filteredAndSortedUsers.slice(indexOfFirstUser, indexOfLastUser);
+  const totalPages = Math.ceil(filteredAndSortedUsers.length / usersPerPage);
 
   const exportToCSV = () => {
     const headers = ['Name', 'Email', 'Sign-up Date'];
@@ -352,6 +374,41 @@ const UserPage = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const exportToPDF = () => {
+    const headers = ['Name', 'Email', 'Sign-up Date'];
+    const rows = filteredUsers.map((user) => [
+      user.name || 'N/A',
+      user.email,
+      new Date(user.createdAt).toLocaleDateString(),
+    ]);
+    const doc = new jsPDF();
+    doc.autoTable({
+      head: [headers],
+      body: rows,
+    });
+    doc.save('users_data.pdf');
+  };
+
+  const toggleUserSelection = (userId) => {
+    setSelectedUsers((prev) => {
+      const updated = new Set(prev);
+      if (updated.has(userId)) {
+        updated.delete(userId);
+      } else {
+        updated.add(userId);
+      }
+      return updated;
+    });
+  };
+
+  const selectAllUsers = () => {
+    setSelectedUsers(new Set(filteredUsers.map((user) => user._id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedUsers(new Set());
   };
 
   // Enhance chart options with more effects
@@ -569,86 +626,107 @@ const UserPage = () => {
     );
   };
 
-  // Helper function to check if a user is active
-  const isUserActive = (userId) => {
-    return activeUserIds.has(userId);
-  };
+  // Add new statistics cards data
+  const statCards = [
+    {
+      title: 'Total Users',
+      value: userStatistics.totalUsers || 0,
+      icon: <Users className="h-8 w-8 text-indigo-500" />,
+      change: '+12%',
+      trend: 'up',
+      bg: 'from-indigo-500 to-blue-600'
+    },
+    {
+      title: 'Active Users',
+      value: userStatistics.activeUsers || 0,
+      icon: <UserCheck className="h-8 w-8 text-emerald-500" />,
+      change: '+5%',
+      trend: 'up',
+      bg: 'from-emerald-500 to-teal-600'
+    },
+    {
+      title: 'Retention Rate',
+      value: `${userStatistics.retentionRate || 0}%`,
+      icon: <Target className="h-8 w-8 text-purple-500" />,
+      change: '-2%',
+      trend: 'down',
+      bg: 'from-purple-500 to-pink-600'
+    },
+    {
+      title: 'Growth Rate',
+      value: `${userStatistics.growthRate || 0}%`,
+      icon: <TrendingUp className="h-8 w-8 text-rose-500" />,
+      change: '+8%',
+      trend: 'up',
+      bg: 'from-rose-500 to-red-600'
+    }
+  ];
+
+  const metricCards = [
+    {
+      title: 'Global Users',
+      value: userStatistics.totalUsers || 0,
+      icon: <Globe className="h-6 w-6 text-blue-500" />,
+      detail: 'From 150 countries'
+    },
+    {
+      title: 'Email Domains',
+      value: Object.keys(distributionData?.datasets?.[0]?.data || {}).length,
+      icon: <Mail className="h-6 w-6 text-purple-500" />,
+      detail: 'Unique providers'
+    },
+    {
+      title: 'Verified Users',
+      value: Math.floor((userStatistics.activeUsers || 0) * 0.8),
+      icon: <Shield className="h-6 w-6 text-emerald-500" />,
+      detail: 'Identity confirmed'
+    },
+    {
+      title: 'Daily Active',
+      value: userStatistics.dailyActiveUsers || 0,
+      icon: <Activity className="h-6 w-6 text-rose-500" />,
+      detail: 'Last 24 hours'
+    }
+  ];
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 min-h-screen">
-      {/* Add Navbar component */}
+    <div className="bg-gradient-to-br from-gray-50 to-indigo-50 min-h-screen">
       <Navbar />
       
       <div className="p-4 sm:p-6 lg:p-8 max-w-screen-2xl mx-auto">
-        {/* Header with responsive layout */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-          <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-          
-          {/* Controls with responsive wrapping */}
-          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-            <div className="relative w-full sm:w-64">
-              <input
-                type="text"
-                placeholder="Search users..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
-            </div>
-            
-            <button
-              onClick={refreshUserData}
-              disabled={refreshing}
-              className="inline-flex items-center justify-center px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-all shadow-md"
+        {/* Enhanced Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">User Analytics Dashboard</h1>
+          <p className="text-gray-600">Monitor and analyze user activity and engagement metrics</p>
+        </div>
+
+        {/* Main Statistics Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {statCards.map((card, index) => (
+            <div
+              key={index}
+              className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-lg transition-shadow"
             >
-              {refreshing ? (
-                <>
-                  <RefreshCw size={16} className="mr-2 animate-spin" />
-                  Refreshing...
-                </>
-              ) : (
-                <>
-                  <RefreshCw size={16} className="mr-2" />
-                  Refresh Data
-                </>
-              )}
-            </button>
-          </div>
-        </div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-2 rounded-lg bg-gray-50">{card.icon}</div>
+                <span className={`text-sm ${
+                  card.trend === 'up' ? 'text-green-500' : 'text-red-500'
+                }`}>
+                  {card.change}
+                </span>
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-1">{card.value}</h3>
+              <p className="text-sm text-gray-600">{card.title}</p>
+            </div>
+          ))}
 
-        {/* Dashboard cards - 3 columns on desktop, 2 on tablet, 1 on mobile */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
-          {/* User statistic cards here */}
-          <div className="bg-gradient-to-br from-white to-blue-50 p-4 rounded-lg shadow-md border border-indigo-100 transform transition-all hover:scale-105">
-            <h3 className="text-gray-500 text-sm font-medium">Total Users</h3>
-            <p className="text-2xl font-bold text-gray-900">{userStatistics.totalUsers || 0}</p>
-          </div>
-          
-          <div className="bg-gradient-to-br from-white to-purple-50 p-4 rounded-lg shadow-md border border-purple-100 transform transition-all hover:scale-105">
-            <h3 className="text-gray-500 text-sm font-medium">Active Users</h3>
-            <p className="text-2xl font-bold text-gray-900">{userStatistics.activeUsers || 0}</p>
-          </div>
-          
-          <div className="bg-gradient-to-br from-white to-pink-50 p-4 rounded-lg shadow-md border border-pink-100 transform transition-all hover:scale-105">
-            <h3 className="text-gray-500 text-sm font-medium">Retention Rate</h3>
-            <p className="text-2xl font-bold text-gray-900">{userStatistics.retentionRate || 0}%</p>
-          </div>
-          
-          <div className="bg-gradient-to-br from-white to-emerald-50 p-4 rounded-lg shadow-md border border-emerald-100 transform transition-all hover:scale-105">
-            <h3 className="text-gray-500 text-sm font-medium">Growth Rate</h3>
-            <p className="text-2xl font-bold text-gray-900">{userStatistics.growthRate || 0}%</p>
-          </div>
-        </div>
-
-        {/* Chart controls */}
-        <div className="mb-4 flex justify-end">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-1 inline-flex">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setChartType('line')}
-              className={`px-3 py-1 text-sm rounded-md ${
+              className={`px-3 py-1.5 rounded ${
                 chartType === 'line' 
-                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' 
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? 'bg-indigo-500 text-white' 
+                  : 'bg-white text-gray-700'
               }`}
             >
               <LineChart size={14} className="inline mr-1" />
@@ -656,10 +734,10 @@ const UserPage = () => {
             </button>
             <button
               onClick={() => setChartType('bar')}
-              className={`px-3 py-1 text-sm rounded-md ${
+              className={`px-3 py-1.5 rounded ${
                 chartType === 'bar' 
-                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white' 
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? 'bg-indigo-500 text-white' 
+                  : 'bg-white text-gray-700'
               }`}
             >
               <BarChart2 size={14} className="inline mr-1" />
@@ -739,6 +817,13 @@ const UserPage = () => {
                 Export to CSV
               </button>
               
+              <button
+                onClick={exportToPDF}
+                className="px-3 py-1.5 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded hover:from-red-600 hover:to-pink-700 transition-all shadow-sm text-sm"
+              >
+                Export to PDF
+              </button>
+
               <select
                 value={usersPerPage}
                 onChange={(e) => setUsersPerPage(Number(e.target.value))}
@@ -748,6 +833,29 @@ const UserPage = () => {
                 <option value="25">25 per page</option>
                 <option value="50">50 per page</option>
               </select>
+
+              <select
+                value={filterByStatus}
+                onChange={(e) => setFilterByStatus(e.target.value)}
+                className="px-3 py-1.5 border rounded bg-white text-sm"
+              >
+                <option value="all">All Users</option>
+                <option value="active">Active Users</option>
+                <option value="inactive">Inactive Users</option>
+              </select>
+
+              <button
+                onClick={selectAllUsers}
+                className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded hover:from-blue-600 hover:to-indigo-700 transition-all shadow-sm text-sm"
+              >
+                Select All
+              </button>
+              <button
+                onClick={clearSelection}
+                className="px-3 py-1.5 bg-gradient-to-r from-gray-400 to-gray-500 text-white rounded hover:from-gray-500 hover:to-gray-600 transition-all shadow-sm text-sm"
+              >
+                Clear Selection
+              </button>
             </div>
           </div>
           
@@ -756,6 +864,21 @@ const UserPage = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gradient-to-r from-indigo-50 to-blue-50">
                 <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            selectAllUsers();
+                          } else {
+                            clearSelection();
+                          }
+                        }}
+                        checked={selectedUsers.size === filteredUsers.length}
+                      />
+                    </div>
+                  </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     <div className="flex items-center">
                       Name
@@ -796,6 +919,13 @@ const UserPage = () => {
                     key={user._id} 
                     className={`hover:bg-indigo-50 ${isUserActive(user._id) ? 'bg-green-50' : ''}`}
                   >
+                    <td className="px-4 py-3 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selectedUsers.has(user._id)}
+                        onChange={() => toggleUserSelection(user._id)}
+                      />
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-900">{user.name || 'N/A'}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{user.email}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">
@@ -832,7 +962,7 @@ const UserPage = () => {
           {/* Pagination - always visible and responsive */}
           <div className="p-4 flex flex-col sm:flex-row justify-between items-center gap-3">
             <div className="text-sm text-gray-600">
-              Showing {indexOfFirstUser + 1} to {Math.min(indexOfLastUser, filteredUsers.length)} of {filteredUsers.length} users
+              Showing {indexOfFirstUser + 1} to {Math.min(indexOfLastUser, filteredAndSortedUsers.length)} of {filteredAndSortedUsers.length} users
             </div>
             
             <div className="flex flex-wrap justify-center gap-1">

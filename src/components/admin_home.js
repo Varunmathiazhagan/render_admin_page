@@ -3,11 +3,12 @@ import Navbar from './Navbar';
 import { Box, ShoppingCart, Users, MessageSquare, BarChart2, Settings, Package, 
          AlertTriangle, TrendingUp, ChevronRight, RefreshCw, ArrowUp, ArrowDown,
          Moon, Sun, Calendar, Bell, HelpCircle, Clock, CheckSquare,
-         Zap, Activity, Edit3, Archive, User, Star } from 'lucide-react';
+         Zap, Activity, Edit3, Archive, User, Star, DollarSign, CreditCard, Layers } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, 
-         PointElement, LineElement, BarElement, Title } from 'chart.js';
+         PointElement, LineElement, BarElement, Title, Filler } from 'chart.js';
+import { Bar, Line, Doughnut, Pie } from 'react-chartjs-2';
 
 // Register ChartJS components
 ChartJS.register(
@@ -19,7 +20,8 @@ ChartJS.register(
   PointElement,
   LineElement,
   BarElement,
-  Title
+  Title,
+  Filler
 );
 
 // Create a mock ThemeProvider hook since we don't have access to the actual context
@@ -296,18 +298,26 @@ const generateSparklineData = (baseline, variance, points = 12) => {
 };
 
 const AdminHome = () => {
+    // Add new state for employees
+    const [employees, setEmployees] = useState(null);
+    const [employeesError, setEmployeesError] = useState(null);
+    const [employeeRetryCount, setEmployeeRetryCount] = useState(0);
+    
     // Define all state variables at the beginning of the component
     const [products, setProducts] = useState(null);
     const [contacts, setContacts] = useState(null);
     const [users, setUsers] = useState(null);
     const [orders, setOrders] = useState(null);
+    const [expenses, setExpenses] = useState(null);
     const [error, setError] = useState(null);
     const [contactsError, setContactsError] = useState(null);
     const [usersError, setUsersError] = useState(null);
     const [ordersError, setOrdersError] = useState(null);
+    const [expensesError, setExpensesError] = useState(null);
     const [retryCount, setRetryCount] = useState(0);
     const [userRetryCount, setUserRetryCount] = useState(0);
     const [orderRetryCount, setOrderRetryCount] = useState(0);
+    const [expenseRetryCount, setExpenseRetryCount] = useState(0);
     const [darkMode, setDarkMode] = useState(false);
     const [recentActivities, setRecentActivities] = useState([]);
     const [loadingActivities, setLoadingActivities] = useState(true);
@@ -315,6 +325,33 @@ const AdminHome = () => {
     const [pendingTasks, setPendingTasks] = useState([]);
     const [taskError, setTaskError] = useState(null);
     const [lowStockProducts, setLowStockProducts] = useState([]); // For stock management
+    const [expenseCategories, setExpenseCategories] = useState({});
+    const [expenseTrends, setExpenseTrends] = useState([]);
+    const [revenueVsExpense, setRevenueVsExpense] = useState({
+        labels: [],
+        revenues: [],
+        expenses: [],
+        profits: [] // Add profits array
+    });
+    const [financialMetrics, setFinancialMetrics] = useState({
+        totalExpenses: 0,
+        avgExpenseAmount: 0,
+        expenseVsRevenue: 0,
+        topExpenseCategory: 'N/A'
+    });
+    // Add the missing profitMetrics state
+    const [profitMetrics, setProfitMetrics] = useState({
+        totalProfit: 0,
+        profitMargin: 0,
+        monthlyProfits: [],
+        profitTrend: 0
+    });
+    const [chartRefs, setChartRefs] = useState({
+        expensePieRef: null,
+        revenueExpenseComparisonRef: null,
+        monthlyTrendsRef: null
+    });
+    const [activeChartTimeframe, setActiveChartTimeframe] = useState('month');
     
     // Add missing state for task modal
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -365,6 +402,10 @@ const AdminHome = () => {
             data: generateSparklineData(50, 15),
             isUp: true
         },
+        expenses: {
+            data: generateSparklineData(40, 12),
+            isUp: true
+        },
         tasks: {
             data: generateSparklineData(20, 7),
             isUp: true
@@ -387,7 +428,7 @@ const AdminHome = () => {
     // Function declarations first - before any hooks that use them
     const loadDashboardData = async () => {
         try {
-            const response = await fetch('http://localhost:5000/api/products');
+            const response = await fetch('http://localhost:5008/api/products');
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -470,6 +511,269 @@ const AdminHome = () => {
                 setOrdersError(errorMessage);
             }
         }
+    };
+
+    // Function to load expense data
+    const loadExpensesData = async (retry = true) => {
+        try {
+            const response = await fetch('http://localhost:5008/api/expenses');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            setExpenses(Array.isArray(data) ? data : []);
+            setExpensesError(null);
+            setExpenseRetryCount(0);
+            
+            // Process expense categories after loading
+            processExpenseData(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error('Expenses error:', error);
+            const errorMessage = 'Failed to load expense data. Please try again.';
+            
+            if (retry && expenseRetryCount < MAX_RETRIES) {
+                setExpenseRetryCount(prev => prev + 1);
+                setTimeout(() => loadExpensesData(true), RETRY_DELAY);
+            } else {
+                setExpensesError(errorMessage);
+                // Use dummy data for visualization if API fails
+                const dummyExpenses = generateDummyExpenseData();
+                setExpenses(dummyExpenses);
+                processExpenseData(dummyExpenses);
+            }
+        }
+    };
+
+    // Generate dummy expense data for fallback
+    const generateDummyExpenseData = () => {
+        const categories = ['Office Supplies', 'Utilities', 'Payroll', 'Marketing', 'Maintenance', 'Travel'];
+        return Array.from({length: 15}, (_, i) => ({
+            _id: `dummy_expense_${i}`,
+            title: `${categories[i % categories.length]} Expense ${i+1}`,
+            amount: Math.floor(Math.random() * 10000) + 500,
+            date: new Date(Date.now() - (i * 24 * 60 * 60 * 1000)).toISOString(),
+            category: categories[i % categories.length]
+        }));
+    };
+
+    // Process expense data for visualization
+    const processExpenseData = (expenseData) => {
+        if (!Array.isArray(expenseData) || expenseData.length === 0) return;
+        
+        // Categorize expenses
+        const categories = {};
+        let totalAmount = 0;
+        
+        expenseData.forEach(expense => {
+            // Extract or infer category
+            const category = expense.category || categorizeExpense(expense.title);
+            totalAmount += Number(expense.amount);
+            
+            if (categories[category]) {
+                categories[category] += Number(expense.amount);
+            } else {
+                categories[category] = Number(expense.amount);
+            }
+        });
+        
+        setExpenseCategories(categories);
+        
+        // Find top expense category
+        let topCategory = 'N/A';
+        let maxAmount = 0;
+        
+        Object.entries(categories).forEach(([category, amount]) => {
+            if (amount > maxAmount) {
+                maxAmount = amount;
+                topCategory = category;
+            }
+        });
+        
+        // Group expenses by month for trends
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        
+        const monthlyExpenses = {};
+        
+        expenseData.forEach(expense => {
+            const date = new Date(expense.date);
+            if (date >= sixMonthsAgo) {
+                const monthYear = `${date.getMonth() + 1}/${date.getFullYear()}`;
+                if (monthlyExpenses[monthYear]) {
+                    monthlyExpenses[monthYear] += Number(expense.amount);
+                } else {
+                    monthlyExpenses[monthYear] = Number(expense.amount);
+                }
+            }
+        });
+        
+        // Sort by date and extract labels and amounts
+        const sortedMonths = Object.keys(monthlyExpenses).sort((a, b) => {
+            const [aMonth, aYear] = a.split('/').map(Number);
+            const [bMonth, bYear] = b.split('/').map(Number);
+            return (aYear !== bYear) ? aYear - bYear : aMonth - bMonth;
+        });
+        
+        const trendLabels = sortedMonths;
+        const trendAmounts = sortedMonths.map(month => monthlyExpenses[month]);
+        
+        setExpenseTrends({
+            labels: trendLabels,
+            amounts: trendAmounts
+        });
+        
+        // Calculate average expense amount
+        const avgAmount = totalAmount / expenseData.length;
+        
+        setFinancialMetrics(prev => ({
+            ...prev,
+            totalExpenses: totalAmount,
+            avgExpenseAmount: avgAmount,
+            topExpenseCategory: topCategory
+        }));
+    };
+
+    // Infer category from expense title
+    const categorizeExpense = (title) => {
+        const lowerTitle = title.toLowerCase();
+        
+        if (lowerTitle.includes('salary') || lowerTitle.includes('payroll') || lowerTitle.includes('wage')) {
+            return 'Payroll';
+        } else if (lowerTitle.includes('rent') || lowerTitle.includes('lease')) {
+            return 'Rent';
+        } else if (lowerTitle.includes('utility') || lowerTitle.includes('electricity') || lowerTitle.includes('water') || lowerTitle.includes('gas')) {
+            return 'Utilities';
+        } else if (lowerTitle.includes('supply') || lowerTitle.includes('office')) {
+            return 'Office Supplies';
+        } else if (lowerTitle.includes('market') || lowerTitle.includes('advertis') || lowerTitle.includes('promo')) {
+            return 'Marketing';
+        } else if (lowerTitle.includes('travel') || lowerTitle.includes('trip') || lowerTitle.includes('fuel')) {
+            return 'Travel';
+        } else if (lowerTitle.includes('maintenance') || lowerTitle.includes('repair')) {
+            return 'Maintenance';
+        }
+        
+        return 'Other';
+    };
+
+    // Compare revenue and expenses
+    const compareRevenueAndExpenses = () => {
+        if (!orders || !expenses) return;
+        
+        // Get order data
+        const ordersArray = Array.isArray(orders) ? orders : 
+                           (orders.orders && Array.isArray(orders.orders)) ? orders.orders : [];
+        
+        // Get expense data
+        const expensesArray = Array.isArray(expenses) ? expenses : [];
+        
+        // Get data for the last 6 months
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        
+        // Group orders by month
+        const monthlyRevenue = {};
+        
+        ordersArray.forEach(order => {
+            const date = new Date(order.createdAt);
+            if (date >= sixMonthsAgo) {
+                const monthYear = `${date.getMonth() + 1}/${date.getFullYear()}`;
+                if (monthlyRevenue[monthYear]) {
+                    monthlyRevenue[monthYear] += Number(order.totalPrice);
+                } else {
+                    monthlyRevenue[monthYear] = Number(order.totalPrice);
+                }
+            }
+        });
+        
+        // Group expenses by month
+        const monthlyExpense = {};
+        
+        expensesArray.forEach(expense => {
+            const date = new Date(expense.date);
+            if (date >= sixMonthsAgo) {
+                const monthYear = `${date.getMonth() + 1}/${date.getFullYear()}`;
+                if (monthlyExpense[monthYear]) {
+                    monthlyExpense[monthYear] += Number(expense.amount);
+                } else {
+                    monthlyExpense[monthYear] = Number(expense.amount);
+                }
+            }
+        });
+        
+        // Get all unique months
+        const allMonths = [...new Set([...Object.keys(monthlyRevenue), ...Object.keys(monthlyExpense)])];
+        
+        // Sort by date
+        allMonths.sort((a, b) => {
+            const [aMonth, aYear] = a.split('/').map(Number);
+            const [bMonth, bYear] = b.split('/').map(Number);
+            return (aYear !== bYear) ? aYear - bYear : aMonth - bMonth;
+        });
+        
+        // Format month labels for display (e.g., "Jan 2023")
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const formattedLabels = allMonths.map(month => {
+            const [monthNum, year] = month.split('/');
+            return `${monthNames[parseInt(monthNum, 10) - 1]} ${year}`;
+        });
+        
+        // Create arrays for chart data
+        const revenueData = allMonths.map(month => monthlyRevenue[month] || 0);
+        const expenseData = allMonths.map(month => monthlyExpense[month] || 0);
+        
+        // Calculate monthly profits
+        const profitData = allMonths.map((month, index) => {
+            const revenue = revenueData[index] || 0;
+            const expense = expenseData[index] || 0;
+            return revenue - expense;
+        });
+        
+        // Calculate total revenue and expenses
+        const totalRevenue = revenueData.reduce((sum, val) => sum + val, 0);
+        const totalExpenses = expenseData.reduce((sum, val) => sum + val, 0);
+        const totalProfit = totalRevenue - totalExpenses;
+        
+        // Calculate profit margin as a percentage
+        const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+        
+        // Calculate profit trend (comparing last two months)
+        let profitTrend = 0;
+        if (profitData.length >= 2) {
+            const lastMonthProfit = profitData[profitData.length - 1];
+            const previousMonthProfit = profitData[profitData.length - 2];
+            
+            if (previousMonthProfit !== 0) {
+                profitTrend = ((lastMonthProfit - previousMonthProfit) / Math.abs(previousMonthProfit)) * 100;
+            } else if (lastMonthProfit > 0) {
+                profitTrend = 100; // If previous month was zero and we have profit now
+            }
+        }
+        
+        // Update profit metrics
+        setProfitMetrics({
+            totalProfit,
+            profitMargin,
+            monthlyProfits: profitData,
+            profitTrend
+        });
+        
+        // Calculate expense to revenue ratio (as a percentage)
+        const expenseRatio = totalRevenue > 0 ? (totalExpenses / totalRevenue) * 100 : 0;
+        
+        // Update financial metrics
+        setFinancialMetrics(prev => ({
+            ...prev,
+            expenseVsRevenue: expenseRatio
+        }));
+        
+        // Set data for revenue vs expense chart
+        setRevenueVsExpense({
+            labels: formattedLabels,
+            revenues: revenueData,
+            expenses: expenseData,
+            profits: profitData
+        });
     };
 
     const loadHistoricalData = async () => {
@@ -668,10 +972,12 @@ const AdminHome = () => {
         loadContactsData();
         loadUsersData();
         loadOrdersData();
+        loadExpensesData(); // Add expense data loading
         loadHistoricalData();
         loadPendingTasks();
         loadRecentActivities();
         loadLowStockProducts();
+        loadEmployeesData(); // Add this line
     }, []);
     /* eslint-enable react-hooks/exhaustive-deps */
 
@@ -692,6 +998,13 @@ const AdminHome = () => {
             document.body.classList.add('dark-mode');
         }
     }, [loadAllData]);
+
+    // Add new effect for revenue vs expense comparison
+    useEffect(() => {
+        if (orders && expenses) {
+            compareRevenueAndExpenses();
+        }
+    }, [orders, expenses]);
 
     useEffect(() => {
         if (orders && previousMonthOrders && users && previousMonthUsers && previousMonthRatings) {
@@ -723,7 +1036,7 @@ const AdminHome = () => {
                 return;
             }
             
-            const response = await fetch("http://localhost:5000/api/tasks", {
+            const response = await fetch("http://localhost:5008/api/tasks", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(newTask),
@@ -749,7 +1062,7 @@ const AdminHome = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const deleteTask = async (id) => {
         try {
-            const response = await fetch(`http://localhost:5000/api/tasks/${id}`, { method: "DELETE" });
+            const response = await fetch(`http://localhost:5008/api/tasks/${id}`, { method: "DELETE" });
             if (!response.ok) throw new Error("Failed to delete task");
             setPendingTasks((prev) => prev.filter((task) => task._id !== id));
         } catch (error) {
@@ -760,7 +1073,7 @@ const AdminHome = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const updateTask = async (id, updatedData) => {
         try {
-            const response = await fetch(`http://localhost:5000/api/tasks/${id}`, {
+            const response = await fetch(`http://localhost:5008/api/tasks/${id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(updatedData),
@@ -778,7 +1091,7 @@ const AdminHome = () => {
     const loadPendingTasks = async () => {
         try {
             setTaskError(null);
-            const response = await fetch("http://localhost:5000/api/tasks");
+            const response = await fetch("http://localhost:5008/api/tasks");
             if (!response.ok) throw new Error("Failed to fetch tasks");
             const data = await response.json();
             setPendingTasks(data);
@@ -793,10 +1106,9 @@ const AdminHome = () => {
             setLoadingActivities(true);
             setActivitiesError(null);
 
-            // Fetch data from multiple endpoints
             const [tasksResponse, productsResponse, usersResponse, ordersResponse] = await Promise.all([
-                fetch("http://localhost:5000/api/tasks"),
-                fetch("http://localhost:5000/api/products"),
+                fetch("http://localhost:5008/api/tasks"),
+                fetch("http://localhost:5008/api/products"),
                 fetch("http://localhost:5008/api/users"),
                 fetch("http://localhost:5008/api/orders/admin/all"),
             ]);
@@ -814,7 +1126,6 @@ const AdminHome = () => {
 
             const orders = Array.isArray(ordersData.orders) ? ordersData.orders : ordersData;
 
-            // Format activities
             const formattedActivities = [
                 ...tasks.map(task => ({
                     id: task._id,
@@ -828,11 +1139,11 @@ const AdminHome = () => {
                 ...products.map(product => ({
                     id: product._id,
                     type: 'product',
-                    message: product.stock === 0
-                        ? `Product deleted: ${product.name}`
+                    message: product.stock <= 0
+                        ? `Product out of stock: ${product.name}`
                         : `Product updated: ${product.name}`,
                     time: new Date(product.updatedAt || product.createdAt).toLocaleString(),
-                    status: product.stock === 0 ? 'error' : 'info',
+                    status: product.stock <= 0 ? 'error' : 'info',
                 })),
                 ...users.map(user => ({
                     id: user._id,
@@ -844,17 +1155,13 @@ const AdminHome = () => {
                 ...orders.map(order => ({
                     id: order._id,
                     type: 'order',
-                    message: order.status === 'deleted'
-                        ? `Order deleted: #${order._id}`
-                        : `Order updated: #${order._id}`,
-                    time: new Date(order.updatedAt || order.createdAt).toLocaleString(),
-                    status: order.status === 'deleted' ? 'error' : 'success',
+                    message: `Order placed: #${order.orderReference}`,
+                    time: new Date(order.createdAt).toLocaleString(),
+                    status: 'success',
                 })),
             ];
 
-            // Sort activities by time (most recent first)
             formattedActivities.sort((a, b) => new Date(b.time) - new Date(a.time));
-
             setRecentActivities(formattedActivities);
         } catch (error) {
             console.error("Error loading recent activities:", error);
@@ -866,13 +1173,14 @@ const AdminHome = () => {
 
     const loadLowStockProducts = async () => {
         try {
-            const response = await fetch("http://localhost:5000/api/products");
+            const response = await fetch("http://localhost:5008/api/products");
             if (!response.ok) throw new Error("Failed to fetch products");
             const data = await response.json();
-            const lowStock = data.filter(product => product.stock < 10);
+            const lowStock = data.filter(product => product.stock <= 10); // Adjust threshold as needed
             setLowStockProducts(lowStock);
         } catch (error) {
             console.error("Error loading low stock products:", error);
+            setLowStockProducts([]);
         }
     };
 
@@ -1255,6 +1563,366 @@ const AdminHome = () => {
         );
     };
 
+    // Expense chart component
+    const ExpenseAnalyticsSection = () => {
+        // Format currency
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: 'INR',
+                maximumFractionDigits: 0
+            }).format(amount).replace('₹', '₹ ');
+        };
+        
+        // Create chart data for expense categories pie chart
+        const expensePieData = {
+            labels: Object.keys(expenseCategories),
+            datasets: [
+                {
+                    data: Object.values(expenseCategories),
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.7)',
+                        'rgba(54, 162, 235, 0.7)',
+                        'rgba(255, 206, 86, 0.7)',
+                        'rgba(75, 192, 192, 0.7)',
+                        'rgba(153, 102, 255, 0.7)',
+                        'rgba(255, 159, 64, 0.7)',
+                        'rgba(199, 199, 199, 0.7)',
+                    ],
+                    borderWidth: 1
+                }
+            ]
+        };
+        
+        // Create chart data for revenue vs expense
+        const revenueExpenseData = {
+            labels: revenueVsExpense.labels,
+            datasets: [
+                {
+                    type: 'line',
+                    label: 'Revenue',
+                    borderColor: 'rgb(53, 162, 235)',
+                    borderWidth: 3,
+                    pointBackgroundColor: 'rgb(53, 162, 235)',
+                    data: revenueVsExpense.revenues,
+                    tension: 0.3,
+                    yAxisID: 'y'
+                },
+                {
+                    type: 'bar',
+                    label: 'Expenses',
+                    backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                    data: revenueVsExpense.expenses,
+                    yAxisID: 'y'
+                },
+                {
+                    type: 'line',
+                    label: 'Profit',
+                    borderColor: 'rgb(75, 192, 192)',
+                    borderWidth: 3,
+                    pointBackgroundColor: 'rgb(75, 192, 192)',
+                    data: revenueVsExpense.profits,
+                    tension: 0.3,
+                    yAxisID: 'y',
+                    fill: true,
+                    backgroundColor: 'rgba(75, 192, 192, 0.1)'
+                }
+            ]
+        };
+        
+        // Create chart data for profit trend
+        const profitTrendData = {
+            labels: revenueVsExpense.labels,
+            datasets: [
+                {
+                    label: 'Monthly Profit',
+                    data: revenueVsExpense.profits,
+                    backgroundColor: revenueVsExpense.profits.map(profit => 
+                        profit >= 0 ? 'rgba(75, 192, 192, 0.7)' : 'rgba(255, 99, 132, 0.7)'),
+                    borderColor: revenueVsExpense.profits.map(profit => 
+                        profit >= 0 ? 'rgb(75, 192, 192)' : 'rgb(255, 99, 132)'),
+                    borderWidth: 1
+                }
+            ]
+        };
+        
+        // Create chart options
+        const expensePieOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+                animateScale: true,
+                animateRotate: true,
+                duration: 2000
+            },
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        boxWidth: 15,
+                        padding: 15,
+                        font: {
+                            size: 11
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = formatCurrency(context.raw);
+                            const percentage = ((context.raw / financialMetrics.totalExpenses) * 100).toFixed(1);
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        };
+        
+        const revenueExpenseOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+                duration: 2000
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.dataset.label || '';
+                            const value = formatCurrency(context.raw);
+                            return `${label}: ${value}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    }
+                },
+                y: {
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            if (value >= 1000) {
+                                return '₹' + (value / 1000).toFixed(0) + 'k';
+                            }
+                            return '₹' + value;
+                        }
+                    }
+                }
+            }
+        };
+        
+        // Profit Trend chart options
+        const profitTrendOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = formatCurrency(context.raw);
+                            return `Profit: ${value}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    }
+                },
+                y: {
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            if (Math.abs(value) >= 1000) {
+                                return '₹' + (value / 1000).toFixed(0) + 'k';
+                            }
+                            return '₹' + value;
+                        }
+                    }
+                }
+            }
+        };
+        
+        // Expense insights metrics
+        const expenseInsightsData = [
+            { 
+                title: 'Total Revenue',
+                value: formatCurrency(revenueVsExpense.revenues.reduce((sum, val) => sum + val, 0)),
+                icon: <TrendingUp size={18} className="text-blue-500" />
+            },
+            { 
+                title: 'Total Expenses',
+                value: formatCurrency(financialMetrics.totalExpenses),
+                icon: <CreditCard size={18} className="text-red-500" />
+            },
+            {
+                title: 'Total Profit',
+                value: formatCurrency(profitMetrics.totalProfit),
+                icon: <DollarSign size={18} className="text-green-500" />
+            },
+            {
+                title: 'Profit Margin',
+                value: `${profitMetrics.profitMargin.toFixed(1)}%`,
+                icon: <Activity size={18} className="text-purple-500" />
+            }
+        ];
+        
+        const timeframeButtons = [
+            { id: 'month', label: 'Monthly' },
+            { id: 'quarter', label: 'Quarterly' },
+            { id: 'year', label: 'Yearly' }
+        ];
+        
+        return (
+            <div className="mb-10">
+                <h2 className="text-2xl font-bold mb-6 gradient-text-purple">Financial Analytics</h2>
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    {expenseInsightsData.map((insight, index) => (
+                        <div key={index} className="bg-white rounded-xl shadow-md p-4 border border-gray-100">
+                            <div className="flex items-center mb-2">
+                                <div className="p-2 rounded-full bg-gray-50 mr-3">
+                                    {insight.icon}
+                                </div>
+                                <h3 className="text-sm text-gray-500">{insight.title}</h3>
+                            </div>
+                            <p className="text-2xl font-bold">{insight.value}</p>
+                        </div>
+                    ))}
+                </div>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    {/* Expense Categories Chart */}
+                    <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+                        <h3 className="text-lg font-semibold mb-4">Expense Categories</h3>
+                        <div className="h-80">
+                            {Object.keys(expenseCategories).length > 0 ? (
+                                <Pie data={expensePieData} options={expensePieOptions} />
+                            ) : (
+                                <div className="flex items-center justify-center h-full">
+                                    <p className="text-gray-500">No expense data available</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {/* Profit Trend Chart */}
+                    <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-semibold">Profit Trend</h3>
+                            <div className="flex items-center space-x-2">
+                                <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                                    {profitMetrics.profitTrend > 0 ? (
+                                        <span className="text-green-600 flex items-center">
+                                            <ArrowUp size={12} className="mr-1" />
+                                            {profitMetrics.profitTrend.toFixed(1)}%
+                                        </span>
+                                    ) : profitMetrics.profitTrend < 0 ? (
+                                        <span className="text-red-600 flex items-center">
+                                            <ArrowDown size={12} className="mr-1" />
+                                            {Math.abs(profitMetrics.profitTrend).toFixed(1)}%
+                                        </span>
+                                    ) : (
+                                        "No change"
+                                    )}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="h-80">
+                            {revenueVsExpense.labels.length > 0 ? (
+                                <Bar data={profitTrendData} options={profitTrendOptions} />
+                            ) : (
+                                <div className="flex items-center justify-center h-full">
+                                    <p className="text-gray-500">No profit data available</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                
+                {/* Revenue vs Expenses Chart */}
+                <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100 mb-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-semibold">Revenue, Expenses & Profit</h3>
+                        <div className="flex space-x-2">
+                            {timeframeButtons.map(button => (
+                                <button 
+                                    key={button.id}
+                                    className={`px-3 py-1 text-xs rounded-full ${
+                                        activeChartTimeframe === button.id 
+                                            ? 'bg-indigo-600 text-white' 
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    } transition-colors`}
+                                    onClick={() => setActiveChartTimeframe(button.id)}
+                                >
+                                    {button.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="h-80">
+                        {revenueVsExpense.labels.length > 0 ? (
+                            <Bar data={revenueExpenseData} options={revenueExpenseOptions} />
+                        ) : (
+                            <div className="flex items-center justify-center h-full">
+                                <p className="text-gray-500">No comparison data available</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // Add this function with the other data loading functions
+    const loadEmployeesData = async (retry = true) => {
+        try {
+            const response = await fetch('http://localhost:5008/api/employees');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            setEmployees(data);
+            setEmployeesError(null);
+            setEmployeeRetryCount(0);
+        } catch (error) {
+            console.error('Employees error:', error);
+            const errorMessage = 'Failed to load employees count. Please try again.';
+            
+            if (retry && employeeRetryCount < MAX_RETRIES) {
+                setEmployeeRetryCount(prev => prev + 1);
+                setTimeout(() => loadEmployeesData(true), RETRY_DELAY);
+            } else {
+                setEmployeesError(errorMessage);
+                // Set fallback data
+                setEmployees([
+                    { id: 1, name: "John Doe", role: "Manager" },
+                    { id: 2, name: "Jane Smith", role: "Supervisor" },
+                    { id: 3, name: "Bob Wilson", role: "Staff" },
+                    { id: 4, name: "Alice Brown", role: "Staff" },
+                    { id: 5, name: "Charlie Davis", role: "Staff" }
+                ]);
+            }
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50">
             <div className="hidden">
@@ -1354,8 +2022,8 @@ const AdminHome = () => {
                     </div>
                 </div>
                 
-                {/* First row - 4 cards - Now with larger gaps and improved padding */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                {/* First row - now 5 cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
                     <StatCard 
                         icon={Box}
                         title="Total Products"
@@ -1382,6 +2050,23 @@ const AdminHome = () => {
                         trend={users ? statTrends.users : null}
                     />
                     <StatCard 
+                        icon={Layers}
+                        title="Total Employees"
+                        value={employees ? employees.length : '-'}
+                        loading={!employees && !employeesError}
+                        error={employeesError}
+                        onRetry={() => {
+                            setEmployeeRetryCount(0);
+                            loadEmployeesData(true);
+                        }}
+                        iconClass="icon-gradient-warning"
+                        cardClass="stat-card-warning"
+                        trend={employees ? {
+                            data: generateSparklineData(18, 6),
+                            isUp: true
+                        } : null}
+                    />
+                    <StatCard 
                         icon={MessageSquare}
                         title="Messages"
                         value={contacts ? contacts.length : '-'}
@@ -1391,8 +2076,8 @@ const AdminHome = () => {
                             setRetryCount(0);
                             loadContactsData(true);
                         }}
-                        iconClass="icon-gradient-warning"
-                        cardClass="stat-card-warning"
+                        iconClass="icon-gradient-info"
+                        cardClass="stat-card-info"
                         trend={contacts ? statTrends.messages : null}
                     />
                     <StatCard 
@@ -1406,13 +2091,13 @@ const AdminHome = () => {
                             setOrderRetryCount(0);
                             loadOrdersData(true);
                         }}
-                        iconClass="icon-gradient-info"
-                        cardClass="stat-card-info"
+                        iconClass="icon-gradient-primary"
+                        cardClass="stat-card-primary"
                         trend={statTrends.orders}
                     />
                 </div>
 
-                {/* Second row - 3 cards - Same enhancements */}
+                {/* Second row - 3 cards - Add Expenses card */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
                     <StatCard 
                         icon={TrendingUp}
@@ -1425,28 +2110,41 @@ const AdminHome = () => {
                         trend={statTrends.revenue}
                     />
                     <StatCard 
-                        icon={CheckSquare}
-                        title="Total Tasks"
-                        value={pendingTasks ? pendingTasks.length : '-'}
-                        loading={!pendingTasks && !taskError}
-                        error={taskError}
-                        onRetry={loadPendingTasks}
-                        iconClass="icon-gradient-primary"
-                        cardClass="stat-card-primary"
-                        trend={statTrends.tasks}
-                    />
-                    <StatCard 
-                        icon={AlertTriangle}
-                        title="Stock Alerts"
-                        value={lowStockProducts ? lowStockProducts.length : '-'}
-                        loading={lowStockProducts === null}
-                        error={null}
-                        onRetry={loadLowStockProducts}
+                        icon={CreditCard}
+                        title="Expenses"
+                        value={expenses ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'INR' })
+                            .format(expenses.reduce((total, expense) => total + Number(expense.amount), 0)).replace('INR', '₹') : '-'}
+                        loading={!expenses && !expensesError}
+                        error={expensesError}
+                        onRetry={() => {
+                            setExpenseRetryCount(0);
+                            loadExpensesData(true);
+                        }}
                         iconClass="icon-gradient-warning"
                         cardClass="stat-card-warning"
-                        trend={statTrends.stockAlerts}
+                        trend={statTrends.expenses}
+                    />
+                    <StatCard 
+                        icon={DollarSign}
+                        title="Profit"
+                        value={orders && expenses ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'INR' })
+                            .format(
+                                (orders.reduce((total, order) => total + Number(order.totalPrice || 0), 0)) -
+                                (expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0))
+                            ).replace('INR', '₹') : '-'}
+                        loading={(!orders && !ordersError) || (!expenses && !expensesError)}
+                        error={ordersError || expensesError}
+                        iconClass="icon-gradient-success"
+                        cardClass="stat-card-success"
+                        trend={{
+                            data: generateSparklineData(20, 15),
+                            isUp: profitMetrics.profitTrend >= 0
+                        }}
                     />
                 </div>
+                
+                {/* Add Financial Analytics Section (renamed from Expense Analytics) */}
+                <ExpenseAnalyticsSection />
 
                 {/* Dashboard cards - Now with consistent styling */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">

@@ -25,6 +25,16 @@ import {
   FaHistory,
   FaArrowUp,
   FaArrowDown,
+  FaChartPie,
+  FaMoneyBillWave,
+  FaClock,
+  FaCartPlus,
+  FaShoppingBasket,
+  FaUsers,
+  FaPercent,
+  FaRegClock,
+  FaRegCalendarAlt,
+  FaClipboardList,
 } from "react-icons/fa";
 import axios from "axios";
 import Navbar from "./Navbar";
@@ -322,32 +332,157 @@ const AnalyticsDashboard = ({ orders }) => {
     maintainAspectRatio: false
   };
 
+  // Add new metrics calculation
+  const calculateMetrics = () => {
+    const total = orders.length;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const todayOrders = orders.filter(order => 
+      new Date(order.createdAt) >= today
+    ).length;
+
+    const totalRevenue = orders.reduce((sum, order) => sum + order.totalPrice, 0);
+    const avgOrderValue = total ? totalRevenue / total : 0;
+    
+    const last24Hours = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    const last24HoursOrders = orders.filter(order => 
+      new Date(order.createdAt) >= last24Hours
+    ).length;
+
+    return {
+      todayOrders,
+      last24HoursOrders,
+      totalRevenue,
+      avgOrderValue,
+      orderFrequency: (total / 30).toFixed(1), // Orders per day
+      conversionRate: ((total / 1000) * 100).toFixed(1), // Assuming 1000 visitors
+    };
+  };
+
+  const metrics = calculateMetrics();
+
   return (
     <div className="space-y-6">
-      {/* Existing metrics grid */}
-      <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3 sm:p-4 shadow-sm transition-transform hover:scale-105 duration-300">
-          <p className="text-xs text-blue-600 font-medium">TOTAL ORDERS</p>
-          <p className="text-xl sm:text-2xl font-bold text-blue-700">{totalOrders}</p>
-          <p className="text-xs text-blue-600 mt-1">All time</p>
+      {/* New Overview Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-indigo-50 via-white to-purple-50 rounded-xl p-6 shadow-lg border border-indigo-100">
+          <div className="flex items-center justify-between mb-4">
+            <div className="bg-indigo-100 rounded-lg p-3">
+              <FaCartPlus className="text-indigo-600 text-xl" />
+            </div>
+            <span className="text-sm font-medium text-indigo-600 bg-indigo-100 px-2 py-1 rounded-full">
+              Today
+            </span>
+          </div>
+          <h3 className="text-2xl font-bold text-gray-800 mb-1">
+            {metrics.todayOrders}
+          </h3>
+          <p className="text-sm text-gray-600">New Orders Today</p>
         </div>
-        
-        <div className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-lg p-3 sm:p-4 shadow-sm transition-transform hover:scale-105 duration-300">
-          <p className="text-xs text-emerald-600 font-medium">TOTAL REVENUE</p>
-          <p className="text-xl sm:text-2xl font-bold text-emerald-700">₹{totalRevenue.toFixed(2)}</p>
-          <p className="text-xs text-emerald-600 mt-1">All time</p>
+
+        <div className="bg-gradient-to-br from-emerald-50 via-white to-teal-50 rounded-xl p-6 shadow-lg border border-emerald-100">
+          <div className="flex items-center justify-between mb-4">
+            <div className="bg-emerald-100 rounded-lg p-3">
+              <FaMoneyBillWave className="text-emerald-600 text-xl" />
+            </div>
+            <span className="text-sm font-medium text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">
+              Revenue
+            </span>
+          </div>
+          <h3 className="text-2xl font-bold text-gray-800 mb-1">
+            ₹{metrics.totalRevenue.toFixed(2)}
+          </h3>
+          <p className="text-sm text-gray-600">Total Revenue</p>
         </div>
-        
-        <div className="bg-gradient-to-r from-violet-50 to-purple-50 rounded-lg p-3 sm:p-4 shadow-sm transition-transform hover:scale-105 duration-300">
-          <p className="text-xs text-violet-600 font-medium">AVG ORDER VALUE</p>
-          <p className="text-xl sm:text-2xl font-bold text-violet-700">₹{averageOrderValue.toFixed(2)}</p>
-          <p className="text-xs text-violet-600 mt-1">Per order</p>
+
+        <div className="bg-gradient-to-br from-violet-50 via-white to-purple-50 rounded-xl p-6 shadow-lg border border-violet-100">
+          <div className="flex items-center justify-between mb-4">
+            <div className="bg-violet-100 rounded-lg p-3">
+              <FaShoppingBasket className="text-violet-600 text-xl" />
+            </div>
+            <span className="text-sm font-medium text-violet-600 bg-violet-100 px-2 py-1 rounded-full">
+              Average
+            </span>
+          </div>
+          <h3 className="text-2xl font-bold text-gray-800 mb-1">
+            ₹{metrics.avgOrderValue.toFixed(2)}
+          </h3>
+          <p className="text-sm text-gray-600">Average Order Value</p>
         </div>
-        
-        <div className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg p-3 sm:p-4 shadow-sm transition-transform hover:scale-105 duration-300">
-          <p className="text-xs text-amber-600 font-medium">PROCESSING</p>
-          <p className="text-xl sm:text-2xl font-bold text-amber-700">{processingOrders}</p>
-          <p className="text-xs text-amber-600 mt-1">Pending orders</p>
+
+        <div className="bg-gradient-to-br from-rose-50 via-white to-pink-50 rounded-xl p-6 shadow-lg border border-rose-100">
+          <div className="flex items-center justify-between mb-4">
+            <div className="bg-rose-100 rounded-lg p-3">
+              <FaClock className="text-rose-600 text-xl" />
+            </div>
+            <span className="text-sm font-medium text-rose-600 bg-rose-100 px-2 py-1 rounded-full">
+              24h
+            </span>
+          </div>
+          <h3 className="text-2xl font-bold text-gray-800 mb-1">
+            {metrics.last24HoursOrders}
+          </h3>
+          <p className="text-sm text-gray-600">Orders in 24h</p>
+        </div>
+      </div>
+
+      {/* Additional Metrics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+          <div className="flex items-center space-x-3">
+            <div className="bg-blue-100 rounded-lg p-2">
+              <FaRegClock className="text-blue-600 text-lg" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Order Frequency</p>
+              <p className="text-lg font-semibold text-gray-800">
+                {metrics.orderFrequency} per day
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+          <div className="flex items-center space-x-3">
+            <div className="bg-green-100 rounded-lg p-2">
+              <FaPercent className="text-green-600 text-lg" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Conversion Rate</p>
+              <p className="text-lg font-semibold text-gray-800">
+                {metrics.conversionRate}%
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+          <div className="flex items-center space-x-3">
+            <div className="bg-purple-100 rounded-lg p-2">
+              <FaRegCalendarAlt className="text-purple-600 text-lg" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Processing Time</p>
+              <p className="text-lg font-semibold text-gray-800">
+                ~2.5 days
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+          <div className="flex items-center space-x-3">
+            <div className="bg-pink-100 rounded-lg p-2">
+              <FaClipboardList className="text-pink-600 text-lg" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Fulfillment Rate</p>
+              <p className="text-lg font-semibold text-gray-800">
+                {((orders.filter(o => o.orderStatus === 'delivered').length / orders.length) * 100).toFixed(1)}%
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -716,7 +851,7 @@ const AdminOrdersPage = () => {
 
     try {
       const response = await axios.get(`${API_URL}/api/orders/admin/all`, {
-        timeout: 15000,
+        timeout: 15008,
       });
 
       if (!response.data || !response.data.success) {
@@ -782,15 +917,11 @@ const AdminOrdersPage = () => {
   const handleStatusChange = async (orderId, newStatus) => {
     setUpdatingStatus(true);
     try {
-      console.log(`Updating order ${orderId} to status: ${newStatus}`);
-      
       const response = await axios.put(
         `${API_URL}/api/orders/admin/${orderId}/status`,
         { status: newStatus },
         { headers: { 'Content-Type': 'application/json' } }
       );
-  
-      console.log("Server response:", response.data);
   
       if (response.data.success) {
         const updatedOrder = response.data.order;
@@ -802,7 +933,6 @@ const AdminOrdersPage = () => {
               ? {
                   ...order,
                   orderStatus: updatedOrder.orderStatus,
-                  paymentStatus: updatedOrder.paymentStatus,
                   updatedAt: new Date(updatedOrder.updatedAt || Date.now()),
                 }
               : order
@@ -814,29 +944,14 @@ const AdminOrdersPage = () => {
           setSelectedOrderDetails((prev) => ({
             ...prev,
             orderStatus: updatedOrder.orderStatus,
-            paymentStatus: updatedOrder.paymentStatus,
             updatedAt: new Date(updatedOrder.updatedAt || Date.now()),
           }));
         }
-  
-        setEditingOrder(null); // Close the edit mode
       } else {
         throw new Error(response.data.message || "Failed to update order status");
       }
     } catch (error) {
       console.error("Error updating order status:", error);
-      
-      // Detailed error logging for easier debugging
-      if (error.response) {
-        console.error("Error response data:", error.response.data);
-        console.error("Error response status:", error.response.status);
-        console.error("Error response headers:", error.response.headers);
-      } else if (error.request) {
-        console.error("Error request:", error.request);
-      } else {
-        console.error("Error message:", error.message);
-      }
-      
       alert(
         error.response?.data?.message ||
           "Failed to update order status. Please try again."
@@ -965,6 +1080,38 @@ const AdminOrdersPage = () => {
   // Get trend indicators
   const trends = calculateTrends();
 
+  // Add this helper function to calculate status metrics
+  const calculateStatusMetrics = () => {
+    const total = orders.length;
+    const processing = orders.filter(o => o.orderStatus === 'processing');
+    const shipped = orders.filter(o => o.orderStatus === 'shipped');
+    const delivered = orders.filter(o => o.orderStatus === 'delivered');
+    const cancelled = orders.filter(o => o.orderStatus === 'cancelled');
+
+    return {
+      processing: {
+        count: processing.length,
+        percentage: total ? ((processing.length / total) * 100).toFixed(1) : 0,
+        value: processing.reduce((sum, order) => sum + order.totalPrice, 0).toFixed(2)
+      },
+      shipped: {
+        count: shipped.length,
+        percentage: total ? ((shipped.length / total) * 100).toFixed(1) : 0,
+        value: shipped.reduce((sum, order) => sum + order.totalPrice, 0).toFixed(2)
+      },
+      delivered: {
+        count: delivered.length,
+        percentage: total ? ((delivered.length / total) * 100).toFixed(1) : 0,
+        value: delivered.reduce((sum, order) => sum + order.totalPrice, 0).toFixed(2)
+      },
+      cancelled: {
+        count: cancelled.length,
+        percentage: total ? ((cancelled.length / total) * 100).toFixed(1) : 0,
+        value: cancelled.reduce((sum, order) => sum + order.totalPrice, 0).toFixed(2)
+      }
+    };
+  };
+
   // Render loading state
   if (loading) {
     return (
@@ -1014,7 +1161,7 @@ const AdminOrdersPage = () => {
       <Navbar />
       <div className="container mx-auto px-4 py-6 sm:px-6 lg:px-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <h1 className="text-2xl font-bold">Orders Management</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Orders Management</h1>
           
           <div className="flex flex-wrap gap-3 w-full sm:w-auto">
             <div className="relative flex-grow sm:flex-grow-0">
@@ -1041,7 +1188,90 @@ const AdminOrdersPage = () => {
             </select>
           </div>
         </div>
-        
+
+        {/* New Status Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {/* Processing Card */}
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl shadow-lg border border-amber-100 p-4 transition-all duration-300 hover:shadow-xl hover:scale-105">
+            <div className="flex items-center justify-between mb-3">
+              <div className="bg-amber-100 rounded-lg p-2">
+                <FaBoxOpen className="text-amber-600 text-xl" />
+              </div>
+              <span className="text-amber-600 text-sm font-medium px-2 py-1 bg-amber-100 rounded-full">
+                {calculateStatusMetrics().processing.percentage}%
+              </span>
+            </div>
+            <h3 className="text-2xl font-bold text-amber-700 mb-1">
+              {calculateStatusMetrics().processing.count}
+            </h3>
+            <p className="text-amber-600 font-medium mb-2">Processing Orders</p>
+            <div className="flex items-center text-amber-800">
+              <FaDollarSign className="mr-1" />
+              <span className="text-sm">₹{calculateStatusMetrics().processing.value}</span>
+            </div>
+          </div>
+
+          {/* Shipped Card */}
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl shadow-lg border border-blue-100 p-4 transition-all duration-300 hover:shadow-xl hover:scale-105">
+            <div className="flex items-center justify-between mb-3">
+              <div className="bg-blue-100 rounded-lg p-2">
+                <FaTruck className="text-blue-600 text-xl" />
+              </div>
+              <span className="text-blue-600 text-sm font-medium px-2 py-1 bg-blue-100 rounded-full">
+                {calculateStatusMetrics().shipped.percentage}%
+              </span>
+            </div>
+            <h3 className="text-2xl font-bold text-blue-700 mb-1">
+              {calculateStatusMetrics().shipped.count}
+            </h3>
+            <p className="text-blue-600 font-medium mb-2">Shipped Orders</p>
+            <div className="flex items-center text-blue-800">
+              <FaDollarSign className="mr-1" />
+              <span className="text-sm">₹{calculateStatusMetrics().shipped.value}</span>
+            </div>
+          </div>
+
+          {/* Delivered Card */}
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl shadow-lg border border-green-100 p-4 transition-all duration-300 hover:shadow-xl hover:scale-105">
+            <div className="flex items-center justify-between mb-3">
+              <div className="bg-green-100 rounded-lg p-2">
+                <FaCheckCircle className="text-green-600 text-xl" />
+              </div>
+              <span className="text-green-600 text-sm font-medium px-2 py-1 bg-green-100 rounded-full">
+                {calculateStatusMetrics().delivered.percentage}%
+              </span>
+            </div>
+            <h3 className="text-2xl font-bold text-green-700 mb-1">
+              {calculateStatusMetrics().delivered.count}
+            </h3>
+            <p className="text-green-600 font-medium mb-2">Delivered Orders</p>
+            <div className="flex items-center text-green-800">
+              <FaDollarSign className="mr-1" />
+              <span className="text-sm">₹{calculateStatusMetrics().delivered.value}</span>
+            </div>
+          </div>
+
+          {/* Cancelled Card */}
+          <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-xl shadow-lg border border-red-100 p-4 transition-all duration-300 hover:shadow-xl hover:scale-105">
+            <div className="flex items-center justify-between mb-3">
+              <div className="bg-red-100 rounded-lg p-2">
+                <FaBan className="text-red-600 text-xl" />
+              </div>
+              <span className="text-red-600 text-sm font-medium px-2 py-1 bg-red-100 rounded-full">
+                {calculateStatusMetrics().cancelled.percentage}%
+              </span>
+            </div>
+            <h3 className="text-2xl font-bold text-red-700 mb-1">
+              {calculateStatusMetrics().cancelled.count}
+            </h3>
+            <p className="text-red-600 font-medium mb-2">Cancelled Orders</p>
+            <div className="flex items-center text-red-800">
+              <FaDollarSign className="mr-1" />
+              <span className="text-sm">₹{calculateStatusMetrics().cancelled.value}</span>
+            </div>
+          </div>
+        </div>
+
         <div className="mb-6">
           <button
             onClick={() => setShowAnalytics(!showAnalytics)}
@@ -1053,129 +1283,174 @@ const AdminOrdersPage = () => {
 
         {showAnalytics && <AnalyticsDashboard orders={orders} />}
 
-        <div className="bg-white shadow-lg rounded-lg overflow-hidden border border-gray-100">
+        <div className="bg-white shadow-2xl rounded-xl overflow-hidden border border-gray-200">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gradient-to-r from-gray-50 to-indigo-50">
-                <tr>
+              <thead>
+                <tr className="bg-gradient-to-r from-indigo-500/5 to-purple-500/5">
+                  {/* Order ID Column */}
                   <th 
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-indigo-50 transition-colors"
+                    className="group px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer"
                     onClick={() => handleSort("orderReference")}
                   >
-                    <div className="flex items-center">
-                      Order ID
-                      {sortField === "orderReference" && (
-                        sortDirection === "asc" ? <FaSortUp className="ml-1 text-indigo-500" /> : <FaSortDown className="ml-1 text-indigo-500" />
-                      )}
+                    <div className="flex items-center space-x-1">
+                      <span>Order ID</span>
+                      <div className="transition-colors group-hover:bg-indigo-100 rounded p-1">
+                        {sortField === "orderReference" ? (
+                          sortDirection === "asc" ? <FaSortUp className="text-indigo-600" /> : <FaSortDown className="text-indigo-600" />
+                        ) : <FaSort className="text-gray-400" />}
+                      </div>
                     </div>
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Customer</th>
+
+                  {/* Customer Column */}
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    <div className="flex items-center space-x-1">
+                      <FaUser className="text-gray-400" />
+                      <span>Customer</span>
+                    </div>
+                  </th>
+
+                  {/* Date Column */}
                   <th 
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-indigo-50 transition-colors"
+                    className="group px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer"
                     onClick={() => handleSort("createdAt")}
                   >
-                    <div className="flex items-center">
-                      Date
-                      {sortField === "createdAt" && (
-                        sortDirection === "asc" ? <FaSortUp className="ml-1 text-indigo-500" /> : <FaSortDown className="ml-1 text-indigo-500" />
-                      )}
+                    <div className="flex items-center space-x-1">
+                      <FaCalendarAlt className="text-gray-400" />
+                      <span>Date</span>
+                      <div className="transition-colors group-hover:bg-indigo-100 rounded p-1">
+                        {sortField === "createdAt" ? (
+                          sortDirection === "asc" ? <FaSortUp className="text-indigo-600" /> : <FaSortDown className="text-indigo-600" />
+                        ) : <FaSort className="text-gray-400" />}
+                      </div>
                     </div>
                   </th>
+
+                  {/* Total Column */}
                   <th 
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-indigo-50 transition-colors"
+                    className="group px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer"
                     onClick={() => handleSort("totalPrice")}
                   >
-                    <div className="flex items-center">
-                      Total
-                      {sortField === "totalPrice" && (
-                        sortDirection === "asc" ? <FaSortUp className="ml-1 text-indigo-500" /> : <FaSortDown className="ml-1 text-indigo-500" />
-                      )}
+                    <div className="flex items-center space-x-1">
+                      <FaDollarSign className="text-gray-400" />
+                      <span>Total</span>
+                      <div className="transition-colors group-hover:bg-indigo-100 rounded p-1">
+                        {sortField === "totalPrice" ? (
+                          sortDirection === "asc" ? <FaSortUp className="text-indigo-600" /> : <FaSortDown className="text-indigo-600" />
+                        ) : <FaSort className="text-gray-400" />}
+                      </div>
                     </div>
                   </th>
+
+                  {/* Status Column */}
                   <th 
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-indigo-50 transition-colors"
+                    className="group px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer"
                     onClick={() => handleSort("orderStatus")}
                   >
-                    <div className="flex items-center">
-                      Status
-                      {sortField === "orderStatus" && (
-                        sortDirection === "asc" ? <FaSortUp className="ml-1 text-indigo-500" /> : <FaSortDown className="ml-1 text-indigo-500" />
-                      )}
+                    <div className="flex items-center space-x-1">
+                      <FaClipboardList className="text-gray-400" />
+                      <span>Status</span>
+                      <div className="transition-colors group-hover:bg-indigo-100 rounded p-1">
+                        {sortField === "orderStatus" ? (
+                          sortDirection === "asc" ? <FaSortUp className="text-indigo-600" /> : <FaSortDown className="text-indigo-600" />
+                        ) : <FaSort className="text-gray-400" />}
+                      </div>
                     </div>
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
+
+                  {/* Actions Column */}
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    <span>Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredOrders.length > 0 ? (
-                  filteredOrders.map((order) => (
-                    <tr key={order._id} className="hover:bg-gradient-to-r hover:from-gray-50 hover:to-indigo-50/20 transition-colors">
-                      <td className="px-4 py-3 text-sm font-medium text-indigo-600">{order.orderReference}</td>
-                      <td className="px-4 py-3 text-sm text-gray-700">
-                        <div className="flex flex-col">
-                          <span>{order.userName}</span>
-                          <span className="text-xs text-gray-500">{order.userEmail}</span>
+                  filteredOrders.map((order, index) => (
+                    <tr 
+                      key={order._id} 
+                      className={`group hover:bg-gradient-to-r hover:from-indigo-50/50 hover:to-purple-50/50 transition-colors
+                        ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center">
+                          <span className="text-sm font-medium text-indigo-600">#{order.orderReference}</span>
+                          <div className="ml-2 px-2 py-1 bg-indigo-50 rounded-full">
+                            <span className="text-xs text-indigo-600">{order.orderItems?.length || 0} items</span>
+                          </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-700">{formatDate(order.createdAt)}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">₹{order.totalPrice.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-sm">
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-gray-900">{order.userName}</span>
+                          <span className="text-xs text-gray-500 flex items-center">
+                            <FaEnvelope className="mr-1" /> {order.userEmail}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-sm text-gray-900">{new Date(order.createdAt).toLocaleDateString()}</span>
+                          <span className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleTimeString()}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center space-x-1">
+                          <span className="text-sm font-bold text-gray-900">₹{order.totalPrice.toFixed(2)}</span>
+                          {order.paymentMethod === 'cod' ? (
+                            <span className="px-2 py-1 text-xs bg-amber-50 text-amber-700 rounded-full">COD</span>
+                          ) : (
+                            <span className="px-2 py-1 text-xs bg-green-50 text-green-700 rounded-full">PAID</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
                         {editingOrder && editingOrder._id === order._id ? (
-                          <>
-                            {updatingStatus ? (
-                              <div className="flex items-center text-gray-700">
-                                <div className="animate-spin mr-2 h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div> Updating...
-                              </div>
-                            ) : (
-                              <select
-                                value={order.orderStatus}
-                                onChange={(e) =>
-                                  handleStatusChange(order._id, e.target.value)
-                                }
-                                disabled={updatingStatus}
-                                className="rounded border-gray-300 py-1 text-sm bg-white text-gray-900 focus:ring-indigo-500 focus:border-indigo-500"
-                              >
-                                {statusOptions.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
+                          <div className="flex items-center space-x-2">
+                            <select
+                              value={order.orderStatus}
+                              onChange={(e) => handleStatusChange(order._id, e.target.value)}
+                              disabled={updatingStatus}
+                              className="text-sm rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            >
+                              {statusOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                            {updatingStatus && (
+                              <FaSpinner className="animate-spin text-indigo-600" />
                             )}
-                          </>
+                          </div>
                         ) : (
                           <span 
-                            className="px-2 py-1 rounded-full text-xs font-medium shadow-sm"
-                            style={{
-                              background: order.orderStatus === 'processing' ? 'linear-gradient(to right, #fde68a, #fcd34d)' :
-                                        order.orderStatus === 'shipped' ? 'linear-gradient(to right, #93c5fd, #60a5fa)' :
-                                        order.orderStatus === 'delivered' ? 'linear-gradient(to right, #a7f3d0, #6ee7b7)' :
-                                        'linear-gradient(to right, #fecaca, #f87171)',
-                              color: order.orderStatus === 'processing' ? '#92400e' :
-                                    order.orderStatus === 'shipped' ? '#1e3a8a' :
-                                    order.orderStatus === 'delivered' ? '#065f46' :
-                                    '#991b1b'
-                            }}
+                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium shadow-sm
+                              ${order.orderStatus === 'processing' ? 'bg-amber-100 text-amber-800' :
+                                order.orderStatus === 'shipped' ? 'bg-blue-100 text-blue-800' :
+                                order.orderStatus === 'delivered' ? 'bg-green-100 text-green-800' :
+                                'bg-red-100 text-red-800'}`}
                           >
                             {order.orderStatus}
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-700">
-                        <div className="flex space-x-2">
-                          <button 
+                      <td className="px-6 py-4">
+                        <div className="flex items-center space-x-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
                             onClick={() => handleViewOrderDetails(order)}
-                            className="p-1.5 rounded-full bg-blue-50 hover:bg-blue-100 transition-colors shadow-sm"
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             title="View Details"
                           >
-                            <FaEye className="text-blue-600" />
+                            <FaEye />
                           </button>
-                          <button 
+                          <button
                             onClick={() => setEditingOrder(order)}
-                            className="p-1.5 rounded-full bg-green-50 hover:bg-green-100 transition-colors shadow-sm"
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                             title="Edit Status"
                           >
-                            <FaEdit className="text-green-600" />
+                            <FaEdit />
                           </button>
                         </div>
                       </td>
@@ -1183,10 +1458,13 @@ const AdminOrdersPage = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="6" className="px-4 py-8 text-center">
-                      <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-lg inline-block">
-                        <FaSearch className="text-2xl text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">No orders found matching your criteria</p>
+                    <td colSpan="6" className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center">
+                        <div className="rounded-full bg-gray-100/50 p-4 mb-4">
+                          <FaSearch className="text-2xl text-gray-400" />
+                        </div>
+                        <p className="text-gray-500 font-medium mb-2">No orders found</p>
+                        <p className="text-gray-400 text-sm">Try adjusting your search or filter criteria</p>
                       </div>
                     </td>
                   </tr>

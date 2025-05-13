@@ -1,8 +1,22 @@
 import React, { useEffect, useState, useCallback } from "react";
 import Navbar from "./Navbar";
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
+import { Bar, Pie } from 'react-chartjs-2';
 
-const API_URL = "http://localhost:5000/api/employees";
-const EXPENSE_API_URL = "http://localhost:5000/api/expenses";
+// Register ChartJS components
+ChartJS.register(
+  ArcElement, 
+  Tooltip, 
+  Legend, 
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title
+);
+
+const API_URL = "http://localhost:5008/api/employees";
+const EXPENSE_API_URL = "http://localhost:5008/api/expenses";
+const ORDER_API_URL = "http://localhost:5008/api/orders/admin/all";
 
 const defaultForm = {
   name: "",
@@ -37,6 +51,18 @@ const Employee = () => {
   const [expenseLoading, setExpenseLoading] = useState(false);
   const [notification, setNotification] = useState({ show: false, message: "", type: "" });
   const [activeTab, setActiveTab] = useState("employees");
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [financialStats, setFinancialStats] = useState({
+    totalRevenue: 0,
+    totalExpenses: 0,
+    totalProfit: 0,
+    profitMargin: 0,
+    revenueByMonth: {},
+    expensesByMonth: {},
+    profitsByMonth: {}
+  });
+  const [showFinancial, setShowFinancial] = useState(false);
 
   // Show notification helper function
   const showNotification = (message, type = "success") => {
@@ -71,10 +97,35 @@ const Employee = () => {
     } finally {
       setExpenseLoading(false);
     }
-  }, []);  // Empty dependency array as these don't depend on props or state
-
-  // Note: showNotification is used in fetchEmployees and fetchExpenses
-  // but will be stable between renders since we don't modify its reference
+  }, []);  
+  
+  const fetchOrders = useCallback(async () => {
+    setOrdersLoading(true);
+    try {
+      const res = await fetch(ORDER_API_URL);
+      const data = await res.json();
+      
+      // Handle different response structures
+      let ordersArray = [];
+      if (data.success && Array.isArray(data.orders)) {
+        ordersArray = data.orders;
+      } else if (Array.isArray(data)) {
+        ordersArray = data;
+      }
+      
+      setOrders(ordersArray);
+      
+      // Calculate financial stats after fetching orders
+      if (expenses.length > 0) {
+        calculateFinancialStats(ordersArray, expenses);
+      }
+    } catch (err) {
+      console.error("Error fetching orders:", err);
+      showNotification("Failed to load orders", "error");
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, [expenses]); // Adding expenses as dependency
   
   useEffect(() => { 
     fetchEmployees(); 
@@ -83,6 +134,73 @@ const Employee = () => {
   useEffect(() => { 
     fetchExpenses(); 
   }, [fetchExpenses]);
+  
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+  
+  // Calculate financial statistics
+  const calculateFinancialStats = (ordersData, expensesData) => {
+    if (!Array.isArray(ordersData) || !Array.isArray(expensesData)) return;
+    
+    // Calculate total revenue
+    const totalRevenue = ordersData.reduce((sum, order) => sum + (Number(order.totalPrice) || 0), 0);
+    
+    // Calculate total expenses
+    const totalExpenses = expensesData.reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0);
+    
+    // Calculate total profit
+    const totalProfit = totalRevenue - totalExpenses;
+    
+    // Calculate profit margin
+    const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+    
+    // Group revenue by month
+    const revenueByMonth = {};
+    ordersData.forEach(order => {
+      const date = new Date(order.createdAt);
+      const monthYear = `${date.getMonth() + 1}/${date.getFullYear()}`;
+      
+      if (revenueByMonth[monthYear]) {
+        revenueByMonth[monthYear] += Number(order.totalPrice) || 0;
+      } else {
+        revenueByMonth[monthYear] = Number(order.totalPrice) || 0;
+      }
+    });
+    
+    // Group expenses by month
+    const expensesByMonth = {};
+    expensesData.forEach(expense => {
+      const date = new Date(expense.date);
+      const monthYear = `${date.getMonth() + 1}/${date.getFullYear()}`;
+      
+      if (expensesByMonth[monthYear]) {
+        expensesByMonth[monthYear] += Number(expense.amount) || 0;
+      } else {
+        expensesByMonth[monthYear] = Number(expense.amount) || 0;
+      }
+    });
+    
+    // Calculate profit by month
+    const profitsByMonth = {};
+    const allMonths = [...new Set([...Object.keys(revenueByMonth), ...Object.keys(expensesByMonth)])];
+    
+    allMonths.forEach(month => {
+      const monthlyRevenue = revenueByMonth[month] || 0;
+      const monthlyExpense = expensesByMonth[month] || 0;
+      profitsByMonth[month] = monthlyRevenue - monthlyExpense;
+    });
+    
+    setFinancialStats({
+      totalRevenue,
+      totalExpenses,
+      totalProfit,
+      profitMargin,
+      revenueByMonth,
+      expensesByMonth,
+      profitsByMonth
+    });
+  };
 
   const handleInput = e => {
     const { name, value } = e.target;
@@ -226,6 +344,192 @@ const Employee = () => {
       return 0;
     });
 
+  // Format currency
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0
+    }).format(amount).replace('₹', '₹ ');
+  };
+  
+  // Financial Overview Component
+  const FinancialOverview = () => {
+    // Get last 6 months for chart
+    const getLastSixMonths = () => {
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const today = new Date();
+      const months = [];
+      const monthsData = {};
+      
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(today);
+        d.setMonth(d.getMonth() - i);
+        const monthYear = `${d.getMonth() + 1}/${d.getFullYear()}`;
+        const label = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+        
+        months.push(monthYear);
+        monthsData[monthYear] = label;
+      }
+      
+      return { months, monthsData };
+    };
+    
+    const { months, monthsData } = getLastSixMonths();
+    
+    // Prepare chart data
+    const financialChartData = {
+      labels: months.map(m => monthsData[m]),
+      datasets: [
+        {
+          label: 'Revenue',
+          backgroundColor: 'rgba(54, 162, 235, 0.7)',
+          data: months.map(month => financialStats.revenueByMonth[month] || 0)
+        },
+        {
+          label: 'Expenses',
+          backgroundColor: 'rgba(255, 99, 132, 0.7)',
+          data: months.map(month => financialStats.expensesByMonth[month] || 0)
+        },
+        {
+          label: 'Profit',
+          backgroundColor: 'rgba(75, 192, 192, 0.7)',
+          data: months.map(month => financialStats.profitsByMonth[month] || 0)
+        }
+      ]
+    };
+    
+    const chartOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          stacked: false
+        },
+        y: {
+          stacked: false,
+          ticks: {
+            callback: (value) => {
+              if (value >= 1000) {
+                return `₹${(value/1000).toFixed(0)}k`;
+              }
+              return `₹${value}`;
+            }
+          }
+        }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return `${context.dataset.label}: ${formatCurrency(context.raw)}`;
+            }
+          }
+        }
+      }
+    };
+    
+    // Create expense breakdown data for pie chart
+    const expenseCategories = {};
+    expenses.forEach(expense => {
+      // Infer category from title if not available
+      const category = expense.category || 
+        (expense.title?.toLowerCase().includes('salary') ? 'Payroll' :
+        expense.title?.toLowerCase().includes('rent') ? 'Rent' :
+        expense.title?.toLowerCase().includes('utility') ? 'Utilities' :
+        expense.title?.toLowerCase().includes('office') ? 'Office Supplies' :
+        'Other');
+        
+      if (expenseCategories[category]) {
+        expenseCategories[category] += Number(expense.amount) || 0;
+      } else {
+        expenseCategories[category] = Number(expense.amount) || 0;
+      }
+    });
+    
+    const expenseBreakdownData = {
+      labels: Object.keys(expenseCategories),
+      datasets: [{
+        data: Object.values(expenseCategories),
+        backgroundColor: [
+          'rgba(255, 99, 132, 0.7)',
+          'rgba(54, 162, 235, 0.7)',
+          'rgba(255, 206, 86, 0.7)',
+          'rgba(75, 192, 192, 0.7)',
+          'rgba(153, 102, 255, 0.7)',
+          'rgba(255, 159, 64, 0.7)',
+        ]
+      }]
+    };
+    
+    const pieOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'right',
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const label = context.label || '';
+              const value = formatCurrency(context.raw);
+              const percentage = ((context.raw / financialStats.totalExpenses) * 100).toFixed(1);
+              return `${label}: ${value} (${percentage}%)`;
+            }
+          }
+        }
+      }
+    };
+    
+    return (
+      <div className="mb-8">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-800">Financial Overview</h2>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow p-4">
+            <div className="text-blue-600 text-sm font-medium mb-1">Total Revenue</div>
+            <div className="text-2xl font-bold text-blue-800">{formatCurrency(financialStats.totalRevenue)}</div>
+          </div>
+          
+          <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg shadow p-4">
+            <div className="text-red-600 text-sm font-medium mb-1">Total Expenses</div>
+            <div className="text-2xl font-bold text-red-800">{formatCurrency(financialStats.totalExpenses)}</div>
+          </div>
+          
+          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow p-4">
+            <div className="text-green-600 text-sm font-medium mb-1">Total Profit</div>
+            <div className="text-2xl font-bold text-green-800">{formatCurrency(financialStats.totalProfit)}</div>
+          </div>
+          
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg shadow p-4">
+            <div className="text-purple-600 text-sm font-medium mb-1">Profit Margin</div>
+            <div className="text-2xl font-bold text-purple-800">{financialStats.profitMargin.toFixed(1)}%</div>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-medium text-gray-800 mb-4">Revenue, Expenses & Profit (Last 6 Months)</h3>
+            <div className="h-80">
+              <Bar data={financialChartData} options={chartOptions} />
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-medium text-gray-800 mb-4">Expense Breakdown</h3>
+            <div className="h-80">
+              <Pie data={expenseBreakdownData} options={pieOptions} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
       <Navbar />
@@ -256,6 +560,14 @@ const Employee = () => {
               onClick={() => setActiveTab('expenses')}
             >
               Expenses
+            </button>
+            <button
+              className={`pb-3 px-1 ${activeTab === 'financial' 
+                ? 'border-b-2 border-blue-600 text-blue-600'
+                : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'} transition-colors duration-200`}
+              onClick={() => setActiveTab('financial')}
+            >
+              Financial
             </button>
           </nav>
         </div>
@@ -431,6 +743,11 @@ const Employee = () => {
             </div>
           </div>
         </div>
+        
+        {/* Financial Section */}
+        {activeTab === 'financial' && (
+          <FinancialOverview />
+        )}
         
         {/* Employee Form Modal */}
         {showForm && (

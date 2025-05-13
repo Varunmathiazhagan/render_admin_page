@@ -36,7 +36,8 @@ const AddProduct = () => {
         console.log(pair[0] + ": " + pair[1]);
       }
 
-      const response = await fetch("http://localhost:5000/api/products", {
+      // Update the endpoint to the correct one
+      const response = await fetch("http://localhost:5008/api/admin/products", {
         method: "POST",
         body: form,
       });

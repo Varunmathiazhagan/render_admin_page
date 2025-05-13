@@ -20,6 +20,7 @@ const ManageProducts = () => {
   const [loading, setLoading] = useState(true);
   const [isScrollable, setIsScrollable] = useState(false);
   const tableWrapperRef = useRef(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     fetchProducts();
@@ -56,7 +57,7 @@ const ManageProducts = () => {
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:5000/api/products");
+      const response = await fetch("http://localhost:5008/api/products");
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       if (Array.isArray(data)) {
@@ -90,7 +91,7 @@ const ManageProducts = () => {
       }
 
       const response = await fetch(
-        `http://localhost:5000/api/products/${editingProduct._id}`,
+        `http://localhost:5008/api/admin/products/${editingProduct._id}`,
         {
           method: "PUT",
           body: form,
@@ -108,6 +109,45 @@ const ManageProducts = () => {
     } catch (error) {
       console.error("Update error:", error);
       alert("Error updating product: " + error.message);
+    }
+  };
+
+  const handleAddSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const form = new FormData();
+      form.append("name", formData.name);
+      form.append("description", formData.description);
+      form.append("price", formData.price);
+      form.append("category", formData.category);
+      form.append("rating", formData.rating);
+      form.append("stock", formData.stock);
+
+      // Append image only if a file was selected
+      if (formData.image instanceof File) {
+        form.append("image", formData.image);
+      }
+
+      const response = await fetch(
+        "http://localhost:5008/api/admin/products",
+        {
+          method: "POST",
+          body: form,
+        }
+      );
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to add product");
+      }
+
+      alert("Product added successfully!");
+      setIsAddModalOpen(false);
+      fetchProducts();
+    } catch (error) {
+      console.error("Add product error:", error);
+      setErrorMessage(`Error adding product: ${error.message}`);
+      alert("Error adding product: " + error.message);
     }
   };
 
@@ -167,7 +207,7 @@ const ManageProducts = () => {
       return;
     }
     try {
-      const response = await fetch(`http://localhost:5000/api/products/${id}`, {
+      const response = await fetch(`http://localhost:5008/api/admin/products/${id}`, {
         method: "DELETE",
       });
       const data = await response.json();
@@ -256,7 +296,7 @@ const ManageProducts = () => {
                       <td className="px-4 py-3">
                         <div className="flex items-center">
                           <img
-                            src={product.image}
+                            src={product.image} // Ensure the Base64 image is used directly
                             alt={product.name}
                             className="w-10 h-10 rounded-full object-cover mr-3"
                           />
@@ -560,7 +600,13 @@ const ManageProducts = () => {
                 </button>
               </div>
               {/* Form content - similar to edit form */}
-              <form className="p-4 sm:p-6">
+              <form onSubmit={handleAddSubmit} className="p-4 sm:p-6">
+                {errorMessage && (
+                  <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-md flex items-center">
+                    <AlertCircle size={18} className="mr-2" />
+                    {errorMessage}
+                  </div>
+                )}
                 <div className="mb-4">
                   <label htmlFor="add-name" className="block text-sm font-medium text-gray-700 mb-1">
                     Name
@@ -671,6 +717,7 @@ const ManageProducts = () => {
                     name="image" 
                     onChange={handleChange} 
                     accept="image/*" 
+                    required
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" 
                   />
                 </div>
