@@ -23,17 +23,17 @@ import {
 import 'chartjs-adapter-date-fns';
 import annotationPlugin from 'chartjs-plugin-annotation';
 import { 
-  RefreshCw, ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp,
   PlusCircle, Activity, UserCheck,
   Clock, Eye,
   LineChart, BarChart2, AlertTriangle, CheckCircle,
-  Users, Database, TrendingUp, 
-  UserPlus, UserMinus, Target,
-  Globe, Mail, Shield, X, Calendar, User
+  Users, TrendingUp, Target,
+  Globe, Mail, Shield, RefreshCw, Search
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
+// Register ChartJS components to fix unused import warnings
 ChartJS.register(
   CategoryScale, 
   LinearScale, 
@@ -83,56 +83,25 @@ const UserPage = () => {
 
   const API_URL = 'https://render-user-page.onrender.com';
 
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await axios.get(`${API_URL}/api/users`);
-      setUsers(response.data);
-      processSignupData(response.data);
-      setLoading(false);
-    } catch (err) {
-      setError(err.message || 'Failed to fetch users');
-      setLoading(false);
-    }
-  }, [API_URL]);
+  const calculateMonthlyGrowth = useCallback((userData) => {
+    const now = new Date();
+    const thisMonth = userData.filter(user => {
+      const created = new Date(user.createdAt);
+      return created.getMonth() === now.getMonth() &&
+             created.getFullYear() === now.getFullYear();
+    }).length;
 
-  const fetchUserAnalytics = useCallback(async () => {
-    setAnalyticsLoading(true);
-    try {
-      const response = await axios.get(`${API_URL}/api/users`);
-      if (response.data) {
-        const userData = response.data;
-        setUserStatistics(processUserStats(userData));
-        setActivityLog(generateActivityLog(userData));
-        processEmailDomainDistribution(userData);
-        setUserActivityData(generateActivityPatterns(userData));
-      }
-      setAnalyticsLoading(false);
-    } catch (err) {
-      console.error("Error fetching analytics:", err);
-      addNotification("Failed to load analytics", "error");
-      setAnalyticsLoading(false);
-    }
-  }, [API_URL]);
+    const lastMonth = userData.filter(user => {
+      const created = new Date(user.createdAt);
+      const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1);
+      return created.getMonth() === lastMonthDate.getMonth() &&
+             created.getFullYear() === lastMonthDate.getFullYear();
+    }).length;
 
-  const fetchAllData = useCallback(async () => {
-    try {
-      await Promise.all([
-        fetchUsers(),
-        fetchUserAnalytics()
-      ]);
-    } catch (err) {
-      console.error("Error fetching data:", err);
-      addNotification("Failed to load data", "error");
-    }
-  }, [fetchUsers, fetchUserAnalytics]);
+    return lastMonth ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100) : 0;
+  }, []);
 
-  useEffect(() => {
-    fetchAllData();
-  }, [fetchAllData]);
-
-  const processUserStats = (userData) => {
+  const processUserStats = useCallback((userData) => {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
     
@@ -159,25 +128,79 @@ const UserPage = () => {
       dailyActiveUsers: Math.round(activeUsers * 0.3),
       averageSessionTime: 15
     };
-  };
+  }, [calculateMonthlyGrowth]);
 
-  const calculateMonthlyGrowth = (userData) => {
-    const now = new Date();
-    const thisMonth = userData.filter(user => {
-      const created = new Date(user.createdAt);
-      return created.getMonth() === now.getMonth() &&
-             created.getFullYear() === now.getFullYear();
-    }).length;
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await axios.get(`${API_URL}/api/users`);
+      setUsers(response.data);
+      processSignupData(response.data);
+      setLoading(false);
+    } catch (err) {
+      setError(err.message || 'Failed to fetch users');
+      setLoading(false);
+      addNotification(err.message || 'Failed to fetch users', 'error');
+    }
+  }, [API_URL]);
 
-    const lastMonth = userData.filter(user => {
-      const created = new Date(user.createdAt);
-      const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1);
-      return created.getMonth() === lastMonthDate.getMonth() &&
-             created.getFullYear() === lastMonthDate.getFullYear();
-    }).length;
+  const fetchUserAnalytics = useCallback(async () => {
+    setAnalyticsLoading(true);
+    try {
+      const response = await axios.get(`${API_URL}/api/users`);
+      if (response.data) {
+        const userData = response.data;
+        setUserStatistics(processUserStats(userData));
+        setActivityLog(generateActivityLog(userData));
+        processEmailDomainDistribution(userData);
+        setUserActivityData(generateActivityPatterns(userData));
+        
+        // Initialize engagement and geographic data with dummy values
+        setUserEngagement({
+          labels: ['Logins', 'Time Spent', 'Features Used', 'Interactions', 'Content Created'],
+          datasets: [{
+            label: 'User Engagement',
+            data: [65, 59, 90, 81, 56],
+            backgroundColor: 'rgba(101, 116, 205, 0.2)',
+            borderColor: 'rgba(101, 116, 205, 1)',
+            borderWidth: 1
+          }]
+        });
+        
+        setGeographicData({
+          labels: ['North America', 'Europe', 'Asia', 'South America', 'Africa', 'Oceania'],
+          datasets: [{
+            data: [42, 33, 15, 5, 3, 2],
+            backgroundColor: [
+              '#6366F1', '#8B5CF6', '#EC4899', '#14B8A6', '#84CC16', '#F59E0B'
+            ]
+          }]
+        });
+      }
+      setAnalyticsLoading(false);
+    } catch (err) {
+      console.error("Error fetching analytics:", err);
+      addNotification("Failed to load analytics", "error");
+      setAnalyticsLoading(false);
+    }
+  }, [API_URL, processUserStats]);
 
-    return lastMonth ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100) : 0;
-  };
+  const fetchAllData = useCallback(async () => {
+    try {
+      await Promise.all([
+        fetchUsers(),
+        fetchUserAnalytics()
+      ]);
+    } catch (err) {
+      console.error("Error fetching data:", err);
+      addNotification("Failed to load data", "error");
+    }
+  }, [fetchUsers, fetchUserAnalytics]);
+
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
 
   const generateActivityLog = (userData) => {
     return userData
@@ -338,10 +361,9 @@ const UserPage = () => {
     );
   }, [sortedUsers, searchTerm]);
 
-  // Helper function to check if a user is active
-  const isUserActive = (userId) => {
+  const isUserActive = useCallback((userId) => {
     return activeUserIds.has(userId);
-  };
+  }, [activeUserIds]);
 
   const filteredAndSortedUsers = React.useMemo(() => {
     let usersToFilter = [...filteredUsers];
@@ -351,7 +373,7 @@ const UserPage = () => {
       );
     }
     return usersToFilter;
-  }, [filteredUsers, filterByStatus]);
+  }, [filteredUsers, filterByStatus, isUserActive]);
 
   const indexOfLastUser = currentPage * usersPerPage;
   const indexOfFirstUser = indexOfLastUser - usersPerPage;
@@ -411,7 +433,6 @@ const UserPage = () => {
     setSelectedUsers(new Set());
   };
 
-  // Enhance chart options with more effects
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -488,7 +509,6 @@ const UserPage = () => {
     }
   };
 
-  // Enhanced donut chart options
   const donutOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -548,7 +568,6 @@ const UserPage = () => {
     );
   };
 
-  // New function to render the email distribution chart
   const renderEmailDistributionChart = () => {
     if (!distributionData.datasets) return null;
     return (
@@ -560,7 +579,6 @@ const UserPage = () => {
     );
   };
 
-  // Add new rendering functions for advanced charts
   const renderEngagementRadar = () => {
     if (!userEngagement.datasets) return null;
     return (
@@ -626,7 +644,6 @@ const UserPage = () => {
     );
   };
 
-  // Add new statistics cards data
   const statCards = [
     {
       title: 'Total Users',
@@ -689,18 +706,103 @@ const UserPage = () => {
     }
   ];
 
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+
+  const LoadingIndicator = () => (
+    <div className="flex justify-center items-center p-8">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+    </div>
+  );
+
+  const renderActivityLog = () => {
+    if (!activityLog || activityLog.length === 0) return null;
+    
+    return (
+      <div className="bg-white rounded-lg shadow p-4 mb-6">
+        <h3 className="text-lg font-semibold mb-3">Recent Activity</h3>
+        <div className="space-y-2">
+          {activityLog.map((log) => (
+            <div key={log.id} className="flex items-center text-sm">
+              {getActivityIcon(log.type)}
+              <span className="ml-2">{log.details}</span>
+              <span className="ml-auto text-xs text-gray-500">
+                {formatActivityTime(log.time)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderMetricCards = () => {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {metricCards.map((card, index) => (
+          <div key={index} className="bg-white p-4 rounded-lg shadow flex items-center">
+            <div className="mr-3">{card.icon}</div>
+            <div>
+              <p className="text-sm text-gray-600">{card.title}</p>
+              <p className="text-xl font-bold">{card.value}</p>
+              <p className="text-xs text-gray-500">{card.detail}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="bg-gradient-to-br from-gray-50 to-indigo-50 min-h-screen">
       <Navbar />
       
       <div className="p-4 sm:p-6 lg:p-8 max-w-screen-2xl mx-auto">
-        {/* Enhanced Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">User Analytics Dashboard</h1>
-          <p className="text-gray-600">Monitor and analyze user activity and engagement metrics</p>
+        <div className="mb-8 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">User Analytics Dashboard</h1>
+            <p className="text-gray-600">Monitor and analyze user activity and engagement metrics</p>
+          </div>
+          <button 
+            onClick={refreshUserData}
+            className={`p-2 rounded-full bg-indigo-100 text-indigo-600 hover:bg-indigo-200 ${refreshing ? 'animate-spin' : ''}`}
+          >
+            <RefreshCw className="h-5 w-5" />
+          </button>
         </div>
 
-        {/* Main Statistics Cards */}
+        <div className="mb-6">
+          <div className="relative max-w-md">
+            <input
+              type="text"
+              placeholder="Search users by name or email..."
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              value={searchTerm}
+              onChange={handleSearchChange}
+            />
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+              <Search className="h-5 w-5 text-gray-400" />
+            </div>
+          </div>
+        </div>
+
+        {loading && <LoadingIndicator />}
+
+        {error && (
+          <div className="p-4 mb-6 bg-red-100 border border-red-200 text-red-700 rounded-lg flex items-center">
+            <AlertTriangle className="h-5 w-5 mr-2" />
+            {error}
+          </div>
+        )}
+
+        {analyticsLoading && (
+          <div className="text-center py-4">
+            <p className="text-sm text-gray-500">Loading analytics data...</p>
+            <div className="mt-2 animate-pulse h-2 bg-indigo-200 rounded"></div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {statCards.map((card, index) => (
             <div
@@ -746,7 +848,6 @@ const UserPage = () => {
           </div>
         </div>
 
-        {/* Chart view selector */}
         <div className="mb-6 flex flex-wrap gap-2">
           {['growth', 'engagement', 'retention', 'geography', 'demographics'].map(view => (
             <button
@@ -763,7 +864,6 @@ const UserPage = () => {
           ))}
         </div>
 
-        {/* Analytics section with responsive chart containers */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-white p-4 rounded-lg shadow-md border border-indigo-100 transition-all duration-300 hover:shadow-lg">
             <h3 className="text-lg font-semibold mb-4 text-gray-800">User Growth</h3>
@@ -780,17 +880,14 @@ const UserPage = () => {
           </div>
         </div>
 
-        {/* Dynamic chart container */}
         <div className="bg-white p-6 rounded-lg shadow-lg mb-8">
           <div className="h-80">
             {chartView === 'growth' && renderChart()}
             {chartView === 'engagement' && renderEngagementRadar()}
             {chartView === 'geography' && renderGeographicDistribution()}
-            {/* Add other chart views */}
           </div>
         </div>
 
-        {/* User activity patterns */}
         <div className="bg-white p-4 rounded-lg shadow-md border border-indigo-100 mb-8 transition-all duration-300 hover:shadow-lg">
           <h3 className="text-lg font-semibold mb-4 text-gray-800">User Activity Patterns</h3>
           <div className="h-40 md:h-60">
@@ -798,13 +895,14 @@ const UserPage = () => {
           </div>
         </div>
 
-        {/* User table with horizontal scroll for small screens */}
+        {renderActivityLog()}
+        {renderMetricCards()}
+
         <div className="bg-white rounded-lg shadow-md border border-indigo-100 overflow-hidden">
           <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <h2 className="text-xl font-semibold text-gray-800">User List</h2>
             
             <div className="flex flex-wrap gap-2 items-center">
-              {/* Add legend for active users */}
               <div className="flex items-center mr-4">
                 <div className="w-3 h-3 rounded-full bg-green-100 border-2 border-green-500 mr-1"></div>
                 <span className="text-xs text-gray-600">Active User</span>
@@ -859,7 +957,6 @@ const UserPage = () => {
             </div>
           </div>
           
-          {/* Table with horizontal scroll for mobile */}
           <div className="overflow-x-auto" ref={tableRef}>
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gradient-to-r from-indigo-50 to-blue-50">
@@ -959,7 +1056,6 @@ const UserPage = () => {
             </table>
           </div>
           
-          {/* Pagination - always visible and responsive */}
           <div className="p-4 flex flex-col sm:flex-row justify-between items-center gap-3">
             <div className="text-sm text-gray-600">
               Showing {indexOfFirstUser + 1} to {Math.min(indexOfLastUser, filteredAndSortedUsers.length)} of {filteredAndSortedUsers.length} users
