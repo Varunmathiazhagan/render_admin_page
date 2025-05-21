@@ -6,6 +6,7 @@ const jwt = require("jsonwebtoken");
 const { OAuth2Client } = require("google-auth-library");
 const multer = require("multer"); // Add multer dependency
 const PDFDocument = require("pdfkit"); // Add PDFKit dependency
+const twilio = require('twilio');
 
 const app = express();
 const PORT = 5008;
@@ -13,13 +14,19 @@ const JWT_SECRET = "4953546c308be3088b28807c767bd35e99818434d130a588e5e6d90b6d1d
 const GOOGLE_CLIENT_ID = "435475456119-dsajbk8ujprqvig0nua0g9qfmmks5v2j.apps.googleusercontent.com";
 const MONGO_URI = "mongodb+srv://varun:454697@ksp.gqt0t.mongodb.net/M_v?retryWrites=true&w=majority";
 
+// Twilio credentials
+const accountSid = 'ACc0cb37efc0705fbe73b2ecbea1b94f6d';
+const authToken = 'a68d85939e056f8f958bd7c14e8466f3';
+const twilioPhoneNumber = '+17756181167'; // Your Twilio number
+const client = twilio(accountSid, authToken);
+
 // Update JWT expiration to one day
 const JWT_EXPIRATION = "1d"; // 1 day
 
 // Middleware
 app.use(express.json());
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', '*'],
+  origin: ['https://ksp-gamma.vercel.app', 'https://kspyarnsadmin.vercel.app', 'http://localhost:5173', '*'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -34,7 +41,7 @@ mongoose
   .then(async () => {
     console.log("MongoDB connected");
     
-    // Update the counter document to sync with highest product id
+   
     const lastProduct = await Product.findOne({}).sort({ id: -1 });
     const maxId = lastProduct ? lastProduct.id : 0;
     await Counter.findByIdAndUpdate(
@@ -44,7 +51,7 @@ mongoose
     );
     console.log(`Counter set to ${maxId}`);
     
-    // Ensure unique index on product id
+   
     try {
       await mongoose.connection.collection("products").dropIndex("id_1");
       console.log("Dropped existing index");
@@ -135,6 +142,7 @@ const orderSchema = new mongoose.Schema({
     addressLine1: { type: String, required: true },
     city: { type: String, required: true },
     postalCode: { type: String, required: true },
+    phone: { type: String, required: true }, // Add phone field
   },
   deliveryMethod: {
     type: String,
@@ -701,16 +709,13 @@ app.post("/api/orders", async (req, res) => {
       !userEmail ||
       !orderItems ||
       !shippingInfo ||
+      !shippingInfo.phone || // Ensure phone is provided
       !deliveryMethod ||
       !paymentMethod ||
       !subtotal ||
       !totalPrice
     ) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required fields",
-        details: "Please provide all necessary order information",
-      });
+      return res.status(400).json({ message: "Missing required fields" });
     }
 
     const finalOrderReference =
@@ -795,7 +800,10 @@ app.post("/api/orders", async (req, res) => {
       userEmail,
       userName: userName || (validatedUserId ? "Registered User" : "Guest User"),
       orderItems: processedOrderItems,
-      shippingInfo,
+      shippingInfo: {
+        ...shippingInfo,
+        phone: shippingInfo.phone, // Store phone number
+      },
       deliveryMethod,
       paymentMethod,
       subtotal,
@@ -1013,6 +1021,13 @@ app.put("/api/orders/admin/:id/status", async (req, res) => {
     }
 
     await order.save();
+
+    // Send SMS notification to the user
+    const userPhone = order.shippingInfo.phone;
+    if (userPhone) {
+      const smsMessage = `Hello ${order.userName || "Customer"}, your order with reference ${order.orderReference} is now ${status.toUpperCase()}. Thank you for shopping with us!`;
+      sendSms(userPhone, smsMessage);
+    }
 
     res.json({
       success: true,
@@ -1642,6 +1657,20 @@ app.get("/api/orders/:id/print", authenticateToken, async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
+
+// Function to send SMS
+const sendSms = async (to, message) => {
+  try {
+    await client.messages.create({
+      body: message,
+      from: twilioPhoneNumber,
+      to,
+    });
+    console.log(`SMS sent to ${to}`);
+  } catch (error) {
+    console.error(`Failed to send SMS to ${to}:`, error.message);
+  }
+};
 
 // Start Server
 app.listen(PORT, () => console.log(`Server is running on port: ${PORT}`));
