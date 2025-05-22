@@ -2,8 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home, PlusCircle, ListChecks, ShoppingBag, Users,
-  Bell, Menu, X, MessageSquare, Settings, LogOut,
-  ChevronDown, UserCircle
+  Bell, Menu, X, MessageSquare, LogOut
 } from 'lucide-react';
 
 const Navbar = () => {
@@ -11,13 +10,11 @@ const Navbar = () => {
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const notificationRef = useRef(null);
-  const profileRef = useRef(null);
 
   // Fetch notifications from backend
   useEffect(() => {
@@ -86,12 +83,8 @@ const Navbar = () => {
   // Close dropdowns on outside click
   useEffect(() => {
     const handleOutsideClick = (e) => {
-      if (
-        notificationRef.current && !notificationRef.current.contains(e.target) &&
-        profileRef.current && !profileRef.current.contains(e.target)
-      ) {
+      if (notificationRef.current && !notificationRef.current.contains(e.target)) {
         setIsNotificationOpen(false);
-        setIsProfileOpen(false);
       }
     };
     document.addEventListener('click', handleOutsideClick);
@@ -103,19 +96,11 @@ const Navbar = () => {
   const toggleMenu = () => {
     setIsMenuOpen(prev => !prev);
     setIsNotificationOpen(false);
-    setIsProfileOpen(false);
   };
 
   const toggleNotifications = (e) => {
     e.stopPropagation();
     setIsNotificationOpen(prev => !prev);
-    setIsProfileOpen(false);
-  };
-
-  const toggleProfile = (e) => {
-    e.stopPropagation();
-    setIsProfileOpen(prev => !prev);
-    setIsNotificationOpen(false);
   };
 
   const handleLogout = () => {
@@ -286,66 +271,14 @@ const Navbar = () => {
                   )}
                 </div>
 
-                <div className="relative" ref={profileRef}>
-                  <button
-                    className="flex items-center p-2 rounded-lg text-gray-700 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    onClick={toggleProfile}
-                    aria-label="Profile menu"
-                    aria-expanded={isProfileOpen}
-                  >
-                    <img
-                      src="https://i.pravatar.cc/150?img=12"
-                      alt="Profile"
-                      className="h-8 w-8 rounded-full border-2 border-white"
-                    />
-                    <span className="hidden md:block ml-2 text-sm font-medium">Admin</span>
-                    <ChevronDown className="hidden md:block ml-1 w-4 h-4 text-gray-500" />
-                  </button>
-
-                  {isProfileOpen && (
-                    <div
-                      className="absolute mt-2 w-64 bg-white rounded-lg shadow-xl ring-1 ring-gray-200 z-50"
-                      style={getDropdownPosition()}
-                    >
-                      <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-violet-50">
-                        <div className="flex items-center">
-                          <img
-                            src="https://i.pravatar.cc/150?img=12"
-                            alt="Profile"
-                            className="h-10 w-10 rounded-full border-2 border-white"
-                          />
-                          <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-900">Admin User</p>
-                            <p className="text-xs text-gray-500">admin@ksp.com</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="py-1">
-                        <button
-                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 w-full text-left"
-                          onClick={() => console.log("Navigate to profile")}
-                        >
-                          <UserCircle className="mr-2 w-4 h-4 text-gray-500" />
-                          My Profile
-                        </button>
-                        <button
-                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 w-full text-left"
-                          onClick={() => console.log("Navigate to settings")}
-                        >
-                          <Settings className="mr-2 w-4 h-4 text-gray-500" />
-                          Settings
-                        </button>
-                        <button
-                          onClick={handleLogout}
-                          className="w-full flex items-center px-4 py-2 text-sm text-rose-600 hover:bg-rose-50"
-                        >
-                          <LogOut className="mr-2 w-4 h-4" />
-                          Logout
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center p-2 rounded-lg text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  aria-label="Logout"
+                >
+                  <LogOut className="w-5 h-5" />
+                  <span className="ml-2 text-sm font-medium md:block hidden">Logout</span>
+                </button>
               </div>
             </div>
           </div>

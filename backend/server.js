@@ -7,16 +7,18 @@ const { OAuth2Client } = require("google-auth-library");
 const multer = require("multer"); // Add multer dependency
 const PDFDocument = require("pdfkit"); // Add PDFKit dependency
 const twilio = require('twilio');
+const nodemailer = require('nodemailer'); // Add Nodemailer dependency
 
 const app = express();
+
 const PORT = 5008;
 const JWT_SECRET = "4953546c308be3088b28807c767bd35e99818434d130a588e5e6d90b6d1d326e";
 const GOOGLE_CLIENT_ID = "435475456119-dsajbk8ujprqvig0nua0g9qfmmks5v2j.apps.googleusercontent.com";
 const MONGO_URI = "mongodb+srv://varun:454697@ksp.gqt0t.mongodb.net/M_v?retryWrites=true&w=majority";
 
-// Twilio credentials
-const accountSid = 'ACc0cb37efc0705fbe73b2ecbea1b94f6d';
-const authToken = 'a68d85939e056f8f958bd7c14e8466f3';
+// Twilio credentials (ensure these are correct)
+const accountSid = 'ACc0cb37efc0705fbe73b2ecbea1b94f6d'; // Replace with your actual Account SID
+const authToken = '6a118d8d4e55cb742032ab7f33f58101'; // Replace with your actual Auth Token
 const twilioPhoneNumber = '+17756181167'; // Your Twilio number
 const client = twilio(accountSid, authToken);
 
@@ -686,6 +688,49 @@ app.get("/api/auth/status", authenticateToken, (req, res) => {
   });
 });
 
+// Nodemailer transporter configuration
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'mvarunmathi2004@gmail.com', // Your Gmail address
+    pass: 'ahiw jlsz dzxa ohso' // Your Gmail app password
+  }
+});
+
+// Helper function to send email notifications
+const sendOrderNotification = async (to, subject, text) => {
+  const mailOptions = {
+    from: 'mvarunmathi2004@gmail.com', // Sender email
+    to, // Recipient email
+    subject, // Email subject
+    text // Email body
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Order notification email sent:', info.response);
+  } catch (error) {
+    console.error('Error sending order notification email:', error.message);
+  }
+};
+
+// Helper function to send email notifications for order status updates
+const sendOrderStatusEmail = async (to, orderReference, status) => {
+  const mailOptions = {
+    from: 'mvarunmathi2004@gmail.com', // Sender email
+    to, // Recipient email
+    subject: `Order Status Update - ${orderReference}`,
+    text: `Hello,\n\nYour order with reference ${orderReference} has been updated to the status: ${status.toUpperCase()}.\n\nThank you for shopping with us!`
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Order status email sent:', info.response);
+  } catch (error) {
+    console.error('Error sending order status email:', error.message);
+  }
+};
+
 // Create New Order Endpoint
 app.post("/api/orders", async (req, res) => {
   try {
@@ -845,6 +890,11 @@ app.post("/api/orders", async (req, res) => {
         { new: true }
       );
     }
+
+    // Send email notification to the user
+    const emailSubject = `Order Confirmation - ${savedOrder.orderReference}`;
+    const emailBody = `Hello ${savedOrder.userName},\n\nThank you for your order!\n\nOrder Reference: ${savedOrder.orderReference}\nTotal Price: ₹${savedOrder.totalPrice.toFixed(2)}\n\nWe will notify you once your order is shipped.\n\nThank you for shopping with us!`;
+    sendOrderNotification(savedOrder.userEmail, emailSubject, emailBody);
 
     res.status(201).json({
       success: true,
@@ -1027,6 +1077,11 @@ app.put("/api/orders/admin/:id/status", async (req, res) => {
     if (userPhone) {
       const smsMessage = `Hello ${order.userName || "Customer"}, your order with reference ${order.orderReference} is now ${status.toUpperCase()}. Thank you for shopping with us!`;
       sendSms(userPhone, smsMessage);
+    }
+
+    // Send email notification to the user
+    if (order.userEmail) {
+      sendOrderStatusEmail(order.userEmail, order.orderReference, status);
     }
 
     res.json({
@@ -1661,14 +1716,29 @@ app.get("/api/orders/:id/print", authenticateToken, async (req, res) => {
 // Function to send SMS
 const sendSms = async (to, message) => {
   try {
+    // Ensure the phone number is in E.164 format
+    const formattedNumber = to.startsWith('+') ? to : `+91${to}`;
     await client.messages.create({
       body: message,
       from: twilioPhoneNumber,
-      to,
+      to: formattedNumber,
     });
-    console.log(`SMS sent to ${to}`);
+    console.log(`SMS sent to ${formattedNumber}`);
   } catch (error) {
     console.error(`Failed to send SMS to ${to}:`, error.message);
+    if (error.code === 21408) {
+      console.error(
+        `Twilio Error Code: ${error.code} - Permission to send SMS to this region is not enabled.`
+      );
+      console.error(`More Info: ${error.moreInfo}`);
+    } else {
+      if (error.code) {
+        console.error(`Twilio Error Code: ${error.code}`);
+      }
+      if (error.moreInfo) {
+        console.error(`More Info: ${error.moreInfo}`);
+      }
+    }
   }
 };
 
