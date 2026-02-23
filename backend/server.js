@@ -648,7 +648,7 @@ setInterval(() => {
 
 const apiLimiter = createRateLimiter(15 * 60 * 1000, 100);
 
-const PORT = 5009;
+const PORT = process.env.PORT || 5009;
 const JWT_SECRET = "4953546c308be3088b28807c767bd35e99818434d130a588e5e6d90b6d1d326e";
 const MONGO_URI = "mongodb+srv://varun:454697@ksp.gqt0t.mongodb.net/M_v?retryWrites=true&w=majority";
 
