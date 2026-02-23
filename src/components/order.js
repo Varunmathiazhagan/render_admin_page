@@ -357,7 +357,9 @@ const AnalyticsDashboard = ({ orders }) => {
       totalRevenue,
       avgOrderValue,
       orderFrequency: (total / 30).toFixed(1), // Orders per day
-      conversionRate: ((total / 1000) * 100).toFixed(1), // Assuming 1000 visitors
+      paymentSuccessRate: total > 0
+        ? ((orders.filter((order) => order.paymentStatus === 'completed').length / total) * 100).toFixed(1)
+        : '0.0',
     };
   };
 
@@ -450,9 +452,9 @@ const AnalyticsDashboard = ({ orders }) => {
               <FaPercent className="text-green-600 text-lg" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Conversion Rate</p>
+              <p className="text-sm text-gray-600">Payment Success Rate</p>
               <p className="text-lg font-semibold text-gray-800">
-                {metrics.conversionRate}%
+                {metrics.paymentSuccessRate}%
               </p>
             </div>
           </div>
@@ -480,7 +482,7 @@ const AnalyticsDashboard = ({ orders }) => {
             <div>
               <p className="text-sm text-gray-600">Fulfillment Rate</p>
               <p className="text-lg font-semibold text-gray-800">
-                {((orders.filter(o => o.orderStatus === 'delivered').length / orders.length) * 100).toFixed(1)}%
+                {orders.length > 0 ? ((orders.filter(o => o.orderStatus === 'delivered').length / orders.length) * 100).toFixed(1) : '0.0'}%
               </p>
             </div>
           </div>

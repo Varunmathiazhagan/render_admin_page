@@ -1,6 +1,6 @@
 // Centralized API configuration
 // Change this URL to match your deployed admin backend
-const API_BASE_URL = "https://render-admin-page.onrender.com";
+const API_BASE_URL = "https://render-admin-page-1.onrender.com";
 
 // Helper to get Authorization headers from session token
 export const getAuthHeaders = () => {

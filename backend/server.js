@@ -79,6 +79,32 @@ const registerAdminRoutes = ({
     }
   });
 
+  app.put("/api/contacts/:id/status", authenticateToken, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      const validStatuses = ["new", "inprogress", "completed"];
+      if (!status || !validStatuses.includes(status)) {
+        return res.status(400).json({ error: "Invalid status value" });
+      }
+
+      const contact = await Contact.findByIdAndUpdate(
+        id,
+        { status },
+        { new: true, runValidators: true }
+      );
+
+      if (!contact) {
+        return res.status(404).json({ error: "Contact not found" });
+      }
+
+      res.json({ success: true, message: "Contact status updated", contact });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update contact status", details: error.message });
+    }
+  });
+
   app.get("/api/users", authenticateToken, async (req, res) => {
     try {
       const users = await User.find({}, "email name createdAt").lean();
@@ -731,7 +757,7 @@ const contactSchema = new mongoose.Schema(
     phone: { type: String, required: true },
     subject: { type: String, required: true },
     message: { type: String, required: true },
-    status: { type: String, default: "Pending" },
+    status: { type: String, default: "new" },
     createdAt: { type: Date, default: Date.now, expires: "7d" },
   },
   { timestamps: true }

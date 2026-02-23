@@ -71,11 +71,11 @@ const LatestNews = () => {
 
       let articlesToShow = data.results || [];
 
-      // If no results, use fallback mock data
-      if (articlesToShow.length === 0) {
-        console.log("No articles found, using fallback data");
-        articlesToShow = generateMockTextileNews();
-      }
+            if (articlesToShow.length === 0) {
+                setArticles([]);
+                setError('No textile news available right now.');
+                return;
+            }
 
       // Tag each article as Tamil Nadu-specific or general Indian news
       articlesToShow = articlesToShow.map(article => {
@@ -98,14 +98,10 @@ const LatestNews = () => {
 
       // Ensure we only take up to 6 articles
       setArticles(articlesToShow.slice(0, 6));
-    } catch (error) {
-      console.error("News fetch error:", error);
-      // Use fallback mock data instead of showing error
-      console.log("Using fallback data due to error");
-      const mockNews = generateMockTextileNews();
-      setArticles(mockNews);
-      // Comment out the error message to avoid showing the error to users
-      // setError('Failed to load textile news. Please try again later.');
+        } catch (error) {
+            console.error("News fetch error:", error);
+            setArticles([]);
+            setError('Failed to load textile news. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -120,60 +116,6 @@ const LatestNews = () => {
     const tamilNaduTerms = ['Tamil Nadu', 'Chennai', 'Coimbatore', 'Tiruppur', 'Erode', 
                             'Karur', 'Madurai', 'Kancheepuram', 'Tirunelveli'];
     return tamilNaduTerms.some(term => text.includes(term));
-  };
-
-  // Generate mock textile news for fallback
-  const generateMockTextileNews = () => {
-    return [
-      {
-        title: "Tamil Nadu Textile Industry Shows Strong Growth in Q2 2023",
-        description: "The textile industry in Tamil Nadu reported a 12% growth in exports during the second quarter of 2023, driven by increased demand from European markets.",
-        source_id: "The Hindu Business Line",
-        pubDate: new Date().toISOString(),
-        link: "https://www.example.com/textile-news-1",
-        isTamilNaduSpecific: true
-      },
-      {
-        title: "Coimbatore Spinning Mills Association Announces New Initiatives",
-        description: "The Coimbatore Spinning Mills Association has announced new initiatives to promote sustainable practices in yarn production across Tamil Nadu.",
-        source_id: "The Economic Times",
-        pubDate: new Date(Date.now() - 2*24*60*60*1000).toISOString(),
-        link: "https://www.example.com/textile-news-2",
-        isTamilNaduSpecific: true
-      },
-      {
-        title: "Handloom Weavers in Kancheepuram See Revival in Silk Saree Demand",
-        description: "Traditional silk saree weavers in Kancheepuram district are experiencing renewed demand as consumers return to heritage textiles post-pandemic.",
-        source_id: "India Today",
-        pubDate: new Date(Date.now() - 3*24*60*60*1000).toISOString(),
-        link: "https://www.example.com/textile-news-3",
-        isTamilNaduSpecific: true
-      },
-      {
-        title: "Indian Textile Exports Expected to Reach $100 Billion by 2030",
-        description: "Industry experts predict Indian textile exports could reach $100 billion by 2030, with significant contributions from manufacturing hubs in Tamil Nadu, Gujarat, and Maharashtra.",
-        source_id: "Financial Express",
-        pubDate: new Date(Date.now() - 5*24*60*60*1000).toISOString(),
-        link: "https://www.example.com/textile-news-4",
-        isTamilNaduSpecific: false
-      },
-      {
-        title: "Tiruppur Garment Manufacturers Adopt Advanced Automation",
-        description: "Garment manufacturers in Tiruppur are increasingly adopting automation technologies to improve production efficiency and quality control.",
-        source_id: "Textile Magazine",
-        pubDate: new Date(Date.now() - 7*24*60*60*1000).toISOString(),
-        link: "https://www.example.com/textile-news-5",
-        isTamilNaduSpecific: true
-      },
-      {
-        title: "New Sustainable Cotton Initiative Launched in India",
-        description: "A new initiative promoting sustainable cotton farming practices has been launched across major cotton-producing states in India, aiming to reduce environmental impact.",
-        source_id: "Business Standard",
-        pubDate: new Date(Date.now() - 9*24*60*60*1000).toISOString(),
-        link: "https://www.example.com/textile-news-6",
-        isTamilNaduSpecific: false
-      }
-    ];
   };
 
   const itemVariants = {
@@ -293,9 +235,35 @@ const LatestNews = () => {
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
 
-// Generate sample data for sparklines
-const generateSparklineData = (baseline, variance, points = 12) => {
-    return Array.from({length: points}, () => baseline + (Math.random() * variance * 2 - variance));
+const buildMonthlyTrendData = (items, valueSelector = () => 1, points = 12) => {
+    const data = Array.isArray(items) ? items : [];
+    const buckets = [];
+    const totals = {};
+
+    for (let i = points - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+        buckets.push(key);
+        totals[key] = 0;
+    }
+
+    data.forEach((item) => {
+        const rawDate = item?.createdAt || item?.date || item?.due || item?.updatedAt;
+        if (!rawDate) return;
+        const date = new Date(rawDate);
+        if (Number.isNaN(date.getTime())) return;
+        const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
+        if (!(key in totals)) return;
+        totals[key] += Number(valueSelector(item)) || 0;
+    });
+
+    return buckets.map((key) => totals[key]);
+};
+
+const isTrendUp = (series) => {
+    if (!Array.isArray(series) || series.length < 2) return false;
+    return series[series.length - 1] >= series[0];
 };
 
 const AdminHome = () => {
@@ -381,39 +349,48 @@ const AdminHome = () => {
         { id: 4, title: 'New Product Launch', date: '2023-10-20', type: 'product' },
     ]);
 
-    // Define sparkline trends for stats
+    // Define sparkline trends from fetched data
+    const productTrend = buildMonthlyTrendData(products);
+    const userTrend = buildMonthlyTrendData(users);
+    const messageTrend = buildMonthlyTrendData(contacts);
+    const orderTrend = buildMonthlyTrendData(orders);
+    const revenueTrend = buildMonthlyTrendData(orders, (order) => Number(order.totalPrice) || 0);
+    const expenseTrend = buildMonthlyTrendData(expenses, (expense) => Number(expense.amount) || 0);
+    const taskTrend = buildMonthlyTrendData(pendingTasks);
+    const stockAlertTrend = Array(12).fill(Array.isArray(lowStockProducts) ? lowStockProducts.length : 0);
+
     const statTrends = {
         products: {
-            data: generateSparklineData(15, 5),
-            isUp: true
+            data: productTrend,
+            isUp: isTrendUp(productTrend)
         },
         users: {
-            data: generateSparklineData(25, 8),
-            isUp: true
+            data: userTrend,
+            isUp: isTrendUp(userTrend)
         },
         messages: {
-            data: generateSparklineData(10, 4),
-            isUp: false
+            data: messageTrend,
+            isUp: isTrendUp(messageTrend)
         },
         orders: {
-            data: generateSparklineData(30, 10),
-            isUp: true
+            data: orderTrend,
+            isUp: isTrendUp(orderTrend)
         },
         revenue: {
-            data: generateSparklineData(50, 15),
-            isUp: true
+            data: revenueTrend,
+            isUp: isTrendUp(revenueTrend)
         },
         expenses: {
-            data: generateSparklineData(40, 12),
-            isUp: true
+            data: expenseTrend,
+            isUp: isTrendUp(expenseTrend)
         },
         tasks: {
-            data: generateSparklineData(20, 7),
-            isUp: true
+            data: taskTrend,
+            isUp: isTrendUp(taskTrend)
         },
         stockAlerts: {
-            data: generateSparklineData(12, 4),
-            isUp: false
+            data: stockAlertTrend,
+            isUp: isTrendUp(stockAlertTrend)
         }
     };
 
@@ -547,29 +524,18 @@ const AdminHome = () => {
                 setTimeout(() => loadExpensesData(true), RETRY_DELAY);
             } else {
                 setExpensesError(errorMessage);
-                // Use dummy data for visualization if API fails
-                const dummyExpenses = generateDummyExpenseData();
-                setExpenses(dummyExpenses);
-                processExpenseData(dummyExpenses);
+                setExpenses([]);
+                processExpenseData([]);
             }
         }
     };
 
-    // Generate dummy expense data for fallback
-    const generateDummyExpenseData = () => {
-        const categories = ['Office Supplies', 'Utilities', 'Payroll', 'Marketing', 'Maintenance', 'Travel'];
-        return Array.from({length: 15}, (_, i) => ({
-            _id: `dummy_expense_${i}`,
-            title: `${categories[i % categories.length]} Expense ${i+1}`,
-            amount: Math.floor(Math.random() * 10000) + 500,
-            date: new Date(Date.now() - (i * 24 * 60 * 60 * 1000)).toISOString(),
-            category: categories[i % categories.length]
-        }));
-    };
-
     // Process expense data for visualization
     const processExpenseData = (expenseData) => {
-        if (!Array.isArray(expenseData) || expenseData.length === 0) return;
+        if (!Array.isArray(expenseData) || expenseData.length === 0) {
+            setExpenseCategories({});
+            return;
+        }
         
         // Categorize expenses
         const categories = {};
@@ -816,17 +782,16 @@ const AdminHome = () => {
                         });
                         setPreviousMonthOrders(filteredOrders);
                     } else {
-                        console.warn('Historical orders endpoint returned unexpected format, using orders data');
-                        // Default to all orders as fallback
-                        setPreviousMonthOrders(generateFallbackOrdersData(20));
+                        console.warn('Historical orders endpoint returned unexpected format');
+                        setPreviousMonthOrders([]);
                     }
                 } else {
-                    console.warn('Historical orders endpoint failed, using fallback data');
-                    setPreviousMonthOrders(generateFallbackOrdersData(20));
+                    console.warn('Historical orders endpoint failed');
+                    setPreviousMonthOrders([]);
                 }
             } catch (error) {
                 console.warn('Error fetching historical orders:', error);
-                setPreviousMonthOrders(generateFallbackOrdersData(20));
+                setPreviousMonthOrders([]);
             }
             
             // Try to get historical users data
@@ -845,53 +810,29 @@ const AdminHome = () => {
                         });
                         setPreviousMonthUsers(filteredUsers);
                     } else {
-                        console.warn('Users endpoint returned unexpected format, using fallback data');
-                        setPreviousMonthUsers(generateFallbackUsersData(15));
+                        console.warn('Users endpoint returned unexpected format');
+                        setPreviousMonthUsers([]);
                     }
                 } else {
-                    console.warn('Users endpoint failed, using fallback data');
-                    setPreviousMonthUsers(generateFallbackUsersData(15));
+                    console.warn('Users endpoint failed');
+                    setPreviousMonthUsers([]);
                 }
             } catch (error) {
                 console.warn('Error fetching historical users:', error);
-                setPreviousMonthUsers(generateFallbackUsersData(15));
+                setPreviousMonthUsers([]);
             }
             
-            // For ratings, we'll create fallback data since there's no dedicated endpoint
-            setPreviousMonthRatings(generateFallbackRatingsData(30));
+            setPreviousMonthRatings([]);
             
         } catch (error) {
             console.error("Error loading historical data:", error);
             setMetricsError("Failed to load historical data for comparison.");
-            // Set fallback data
-            setPreviousMonthOrders(generateFallbackOrdersData(20));
-            setPreviousMonthUsers(generateFallbackUsersData(15));
-            setPreviousMonthRatings(generateFallbackRatingsData(30));
+            setPreviousMonthOrders([]);
+            setPreviousMonthUsers([]);
+            setPreviousMonthRatings([]);
         } finally {
             setLoadingMetrics(false);
         }
-    };
-    
-    // Generate fallback data for calculations when API endpoints don't exist
-    const generateFallbackOrdersData = (count) => {
-        return Array.from({ length: count }, (_, i) => ({
-            totalPrice: Math.floor(Math.random() * 500) + 50,
-            rating: Math.floor(Math.random() * 5) + 1,
-            createdAt: new Date(Date.now() - (i * 24 * 60 * 60 * 1000)).toISOString()
-        }));
-    };
-    
-    const generateFallbackUsersData = (count) => {
-        return Array.from({ length: count }, (_, i) => ({
-            _id: `fallback_user_${i}`,
-            email: `user${i}@example.com`,
-            name: `User ${i}`,
-            createdAt: new Date(Date.now() - (i * 24 * 60 * 60 * 1000)).toISOString()
-        }));
-    };
-    
-    const generateFallbackRatingsData = (count) => {
-        return Array.from({ length: count }, () => Math.floor(Math.random() * 5) + 1);
     };
     
     const calculatePerformanceMetrics = () => {
@@ -908,8 +849,7 @@ const AdminHome = () => {
                 ((currentRevenue - previousRevenue) / previousRevenue) * 100 : 
                 currentRevenue > 0 ? 100 : 0;
             
-            const previousGrowthRate = 12.2;
-            const growthRateChange = salesGrowthPercentage - previousGrowthRate;
+            const growthRateChange = salesGrowthPercentage;
             
             const currentUsersList = Array.isArray(users) ? users : [];
             const previousUsersList = Array.isArray(previousMonthUsers) ? previousMonthUsers : [];
@@ -925,8 +865,7 @@ const AdminHome = () => {
             const retentionRate = previousUserIds.size > 0 ? 
                 (returningUserCount / previousUserIds.size) * 100 : 0;
                 
-            const previousRetentionRate = retentionRate - 3.2;
-            const retentionChange = retentionRate - previousRetentionRate;
+            const retentionChange = 0;
             
             let currentRatings = [];
             let previousRatings = [];
@@ -942,10 +881,6 @@ const AdminHome = () => {
                     previousRatings.push(order.rating);
                 }
             });
-            
-            if (currentRatings.length === 0) {
-                currentRatings = [5, 4, 5, 4, 5, 4, 5, 5];
-            }
             
             if (previousRatings.length === 0 && previousMonthRatings) {
                 previousRatings = previousMonthRatings;
@@ -1932,14 +1867,7 @@ const AdminHome = () => {
                 setTimeout(() => loadEmployeesData(true), RETRY_DELAY);
             } else {
                 setEmployeesError(errorMessage);
-                // Set fallback data
-                setEmployees([
-                    { id: 1, name: "John Doe", role: "Manager" },
-                    { id: 2, name: "Jane Smith", role: "Supervisor" },
-                    { id: 3, name: "Bob Wilson", role: "Staff" },
-                    { id: 4, name: "Alice Brown", role: "Staff" },
-                    { id: 5, name: "Charlie Davis", role: "Staff" }
-                ]);
+                setEmployees([]);
             }
         }
     };
@@ -2083,8 +2011,8 @@ const AdminHome = () => {
                         iconClass="icon-gradient-warning"
                         cardClass="stat-card-warning"
                         trend={employees ? {
-                            data: generateSparklineData(18, 6),
-                            isUp: true
+                            data: buildMonthlyTrendData(employees),
+                            isUp: isTrendUp(buildMonthlyTrendData(employees))
                         } : null}
                     />
                     <StatCard 
@@ -2158,7 +2086,7 @@ const AdminHome = () => {
                         iconClass="icon-gradient-success"
                         cardClass="stat-card-success"
                         trend={{
-                            data: generateSparklineData(20, 15),
+                            data: revenueVsExpense?.profits?.length ? revenueVsExpense.profits : [0],
                             isUp: profitMetrics.profitTrend >= 0
                         }}
                     />

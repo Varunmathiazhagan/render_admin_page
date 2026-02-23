@@ -104,8 +104,7 @@ const UserPage = () => {
 
   const processUserStats = useCallback((userData) => {
     const now = new Date();
-    const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
-    
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     
     const activeIds = new Set();
     userData.forEach(user => {
@@ -124,7 +123,7 @@ const UserPage = () => {
     return {
       totalUsers,
       activeUsers,
-      retentionRate: Math.round((activeUsers / totalUsers) * 100),
+      retentionRate: totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0,
       growthRate: monthlyGrowth,
       dailyActiveUsers: Math.round(activeUsers * 0.3),
       averageSessionTime: 15
@@ -160,26 +159,56 @@ const UserPage = () => {
         setActivityLog(generateActivityLog(userData));
         processEmailDomainDistribution(userData);
         setUserActivityData(generateActivityPatterns(userData));
-        
-        // Initialize engagement and geographic data with dummy values
+
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const activeUsersCount = userData.filter((user) => {
+          const lastActivity = new Date(user.lastLogin || user.createdAt);
+          return lastActivity >= thirtyDaysAgo;
+        }).length;
+        const withPhoneCount = userData.filter((user) => Boolean(user.phone)).length;
+        const withAddressCount = userData.filter((user) => Boolean(user.address)).length;
+        const withProfileImageCount = userData.filter((user) => Boolean(user.profileImage)).length;
+        const withPreferencesCount = userData.filter((user) => Boolean(user.preferences)).length;
+
         setUserEngagement({
-          labels: ['Logins', 'Time Spent', 'Features Used', 'Interactions', 'Content Created'],
+          labels: ['Active (30d)', 'With Phone', 'With Address', 'Profile Image', 'Preferences Set'],
           datasets: [{
             label: 'User Engagement',
-            data: [65, 59, 90, 81, 56],
+            data: [
+              activeUsersCount,
+              withPhoneCount,
+              withAddressCount,
+              withProfileImageCount,
+              withPreferencesCount,
+            ],
             backgroundColor: 'rgba(101, 116, 205, 0.2)',
             borderColor: 'rgba(101, 116, 205, 1)',
             borderWidth: 1
           }]
         });
-        
+
+        const getCountryFromAddress = (address) => {
+          if (!address || typeof address !== 'string') return 'Unknown';
+          const parts = address.split(',').map((part) => part.trim()).filter(Boolean);
+          return parts.length ? parts[parts.length - 1] : 'Unknown';
+        };
+
+        const geographicCounts = userData.reduce((acc, user) => {
+          const country = getCountryFromAddress(user.address);
+          acc[country] = (acc[country] || 0) + 1;
+          return acc;
+        }, {});
+
+        const geoEntries = Object.entries(geographicCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+        const geoLabels = geoEntries.map(([label]) => label);
+        const geoValues = geoEntries.map(([, value]) => value);
+
         setGeographicData({
-          labels: ['North America', 'Europe', 'Asia', 'South America', 'Africa', 'Oceania'],
+          labels: geoLabels.length > 0 ? geoLabels : ['Unknown'],
           datasets: [{
-            data: [42, 33, 15, 5, 3, 2],
-            backgroundColor: [
-              '#6366F1', '#8B5CF6', '#EC4899', '#14B8A6', '#84CC16', '#F59E0B'
-            ]
+            data: geoValues.length > 0 ? geoValues : [userData.length],
+            backgroundColor: ['#6366F1', '#8B5CF6', '#EC4899', '#14B8A6', '#84CC16', '#F59E0B']
           }]
         });
       }

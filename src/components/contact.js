@@ -16,6 +16,14 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000; // 2 seconds
 const ITEMS_PER_PAGE = 10;
 
+const normalizeContactStatus = (status) => {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'pending') return 'new';
+  if (normalized === 'in progress') return 'inprogress';
+  if (normalized === 'complete') return 'completed';
+  return ['new', 'inprogress', 'completed'].includes(normalized) ? normalized : 'new';
+};
+
 // Status badges component
 const StatusBadge = ({ status }) => {
   const statusStyles = {
@@ -83,17 +91,21 @@ const AdminContacts = () => {
       const response = await axios.get(`${API_BASE_URL}/api/contacts`, {
         headers: getAuthHeaders(),
       });
-      setContacts(response.data);
-      setFilteredContacts(response.data);
-      setTotalPages(Math.ceil(response.data.length / ITEMS_PER_PAGE));
+      const normalizedContacts = (Array.isArray(response.data) ? response.data : []).map((contact) => ({
+        ...contact,
+        status: normalizeContactStatus(contact.status),
+      }));
+      setContacts(normalizedContacts);
+      setFilteredContacts(normalizedContacts);
+      setTotalPages(Math.ceil(normalizedContacts.length / ITEMS_PER_PAGE));
       
       // Calculate statistics for dashboard
       const stats = {
-        total: response.data.length,
-        new: response.data.filter(c => c.status === "new").length,
-        inprogress: response.data.filter(c => c.status === "inprogress").length,
-        completed: response.data.filter(c => c.status === "completed").length,
-        responseTime: calculateAverageResponseTime(response.data)
+        total: normalizedContacts.length,
+        new: normalizedContacts.filter(c => c.status === "new").length,
+        inprogress: normalizedContacts.filter(c => c.status === "inprogress").length,
+        completed: normalizedContacts.filter(c => c.status === "completed").length,
+        responseTime: calculateAverageResponseTime(normalizedContacts)
       };
       setContactStats(stats);
       
@@ -118,10 +130,22 @@ const AdminContacts = () => {
     }
   };
 
-  // Calculate average response time (mock function)
+  // Calculate average response time from contact timestamps (hours)
   const calculateAverageResponseTime = (contacts) => {
-    // In a real app, this would calculate based on actual timestamps
-    return Math.floor(Math.random() * 24) + 1; // Random hours between 1-24
+    const resolvedContacts = contacts.filter(
+      (contact) => contact.status === 'completed' || contact.status === 'inprogress'
+    );
+    if (resolvedContacts.length === 0) return 0;
+
+    const now = Date.now();
+    const totalHours = resolvedContacts.reduce((sum, contact) => {
+      const createdAt = new Date(contact.createdAt).getTime();
+      if (Number.isNaN(createdAt)) return sum;
+      const hours = Math.max(0, (now - createdAt) / (1000 * 60 * 60));
+      return sum + hours;
+    }, 0);
+
+    return Math.round(totalHours / resolvedContacts.length);
   };
 
   // Apply filters and search
@@ -243,8 +267,9 @@ const AdminContacts = () => {
     }, 300);
   };
 
-  // Handle changing contact status
-  const handleStatusChange = (contactId, newStatus) => {
+  // Handle changing contact status (persists to backend)
+  const handleStatusChange = async (contactId, newStatus) => {
+    // Optimistic update
     const updatedContacts = contacts.map(contact => 
       contact._id === contactId ? {...contact, status: newStatus} : contact
     );
@@ -263,6 +288,18 @@ const AdminContacts = () => {
     
     if (showDetailModal && selectedContact && selectedContact._id === contactId) {
       setSelectedContact({...selectedContact, status: newStatus});
+    }
+
+    // Persist to backend
+    try {
+      await axios.put(`${API_BASE_URL}/api/contacts/${contactId}/status`, 
+        { status: newStatus },
+        { headers: { 'Content-Type': 'application/json', ...getAuthHeaders() } }
+      );
+    } catch (error) {
+      console.error("Failed to update contact status:", error);
+      // Revert on failure
+      fetchContacts();
     }
   };
 
@@ -293,14 +330,30 @@ const AdminContacts = () => {
     ],
   };
 
-  // Chart data for contact trends (mock data)
+  // Chart data for contact trends (based on DB records)
   const trendChartData = {
-    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    labels: Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      return d.toLocaleDateString('en-US', { weekday: 'short' });
+    }),
     datasets: [
       {
         fill: true,
         label: 'Contacts',
-        data: Array.from({ length: 7 }, () => Math.floor(Math.random() * 10) + 1),
+        data: Array.from({ length: 7 }, (_, i) => {
+          const start = new Date();
+          start.setHours(0, 0, 0, 0);
+          start.setDate(start.getDate() - (6 - i));
+          const end = new Date(start);
+          end.setDate(end.getDate() + 1);
+
+          return contacts.filter((contact) => {
+            if (!contact.createdAt) return false;
+            const created = new Date(contact.createdAt);
+            return created >= start && created < end;
+          }).length;
+        }),
         borderColor: 'rgb(99, 102, 241)',
         backgroundColor: 'rgba(99, 102, 241, 0.1)',
         tension: 0.4
