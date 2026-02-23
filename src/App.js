@@ -95,7 +95,11 @@ function App() {
               <AdminOrdersPage /> {/* Use the correct component name */}
             </PrivateRoute>
           } />
-          <Route path="/employees" element={<Employee />} />
+          <Route path="/employees" element={
+            <PrivateRoute>
+              <Employee />
+            </PrivateRoute>
+          } />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </div>

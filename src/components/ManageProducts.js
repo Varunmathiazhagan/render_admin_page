@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Navbar from "./Navbar";
 import { Package, X, Edit2, Trash2, Plus, Star, DollarSign, Tag, Box, Loader, AlertCircle, ChevronRight } from "lucide-react";
-// Remove CSS import and use Tailwind classes instead
+import API_BASE_URL, { getAuthHeaders } from '../config';
 
 const ManageProducts = () => {
   const [products, setProducts] = useState([]);
@@ -57,7 +57,9 @@ const ManageProducts = () => {
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const response = await fetch("https://render-user-page.onrender.com/api/products");
+      const response = await fetch(`${API_BASE_URL}/api/admin/products`, {
+        headers: getAuthHeaders(),
+      });
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       if (Array.isArray(data)) {
@@ -91,9 +93,10 @@ const ManageProducts = () => {
       }
 
       const response = await fetch(
-        `https://render-user-page.onrender.com/api/admin/products/${editingProduct._id}`,
+        `${API_BASE_URL}/api/admin/products/${editingProduct._id}`,
         {
           method: "PUT",
+          headers: getAuthHeaders(),
           body: form,
         }
       );
@@ -129,9 +132,10 @@ const ManageProducts = () => {
       }
 
       const response = await fetch(
-        "https://render-user-page.onrender.com/api/admin/products",
+        `${API_BASE_URL}/api/admin/products`,
         {
           method: "POST",
+          headers: getAuthHeaders(),
           body: form,
         }
       );
@@ -207,8 +211,9 @@ const ManageProducts = () => {
       return;
     }
     try {
-      const response = await fetch(`https://render-user-page.onrender.com/api/admin/products/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/admin/products/${id}`, {
         method: "DELETE",
+        headers: getAuthHeaders(),
       });
       const data = await response.json();
       if (!response.ok) {

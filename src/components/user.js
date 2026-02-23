@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import Navbar from './Navbar';
 import { Line, Bar, Doughnut, Radar, PolarArea } from 'react-chartjs-2';
+import API_BASE_URL, { getAuthHeaders } from '../config';
 import { 
   Chart as ChartJS, 
   CategoryScale, 
@@ -81,7 +82,7 @@ const UserPage = () => {
   const tableRef = useRef(null);
   const chartContainerRef = useRef(null);
 
-  const API_URL = 'https://render-user-page.onrender.com';
+  const API_URL = API_BASE_URL;
 
   const calculateMonthlyGrowth = useCallback((userData) => {
     const now = new Date();
@@ -105,7 +106,7 @@ const UserPage = () => {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
     
-    // Identify active users and store their IDs
+    
     const activeIds = new Set();
     userData.forEach(user => {
       const lastActivity = new Date(user.lastLogin || user.createdAt);
@@ -134,7 +135,9 @@ const UserPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${API_URL}/api/users`);
+      const response = await axios.get(`${API_URL}/api/users`, {
+        headers: getAuthHeaders(),
+      });
       setUsers(response.data);
       processSignupData(response.data);
       setLoading(false);
@@ -148,7 +151,9 @@ const UserPage = () => {
   const fetchUserAnalytics = useCallback(async () => {
     setAnalyticsLoading(true);
     try {
-      const response = await axios.get(`${API_URL}/api/users`);
+      const response = await axios.get(`${API_URL}/api/users`, {
+        headers: getAuthHeaders(),
+      });
       if (response.data) {
         const userData = response.data;
         setUserStatistics(processUserStats(userData));

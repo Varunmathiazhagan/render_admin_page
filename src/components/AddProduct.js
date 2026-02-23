@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import Navbar from "./Navbar";
 import { Plus, Tag, DollarSign, Star, Package, FileText, Upload, Loader, Check } from "lucide-react";
+import API_BASE_URL, { getAuthHeaders } from '../config';
 
 const AddProduct = () => {
   const [formData, setFormData] = useState({
@@ -37,8 +38,9 @@ const AddProduct = () => {
       }
 
       // Update the endpoint to the correct one
-      const response = await fetch("https://render-user-page.onrender.com/api/admin/products", {
+      const response = await fetch(`${API_BASE_URL}/api/admin/products`, {
         method: "POST",
+        headers: getAuthHeaders(),
         body: form,
       });
 

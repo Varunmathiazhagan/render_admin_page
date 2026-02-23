@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import Navbar from "./Navbar";
+import API_BASE_URL, { getAuthHeaders } from '../config';
 // Import chart libraries
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title, Filler } from 'chart.js';
 import { Pie, Line } from 'react-chartjs-2';
@@ -79,7 +80,9 @@ const AdminContacts = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get("https://render-user-page.onrender.com/api/contacts");
+      const response = await axios.get(`${API_BASE_URL}/api/contacts`, {
+        headers: getAuthHeaders(),
+      });
       setContacts(response.data);
       setFilteredContacts(response.data);
       setTotalPages(Math.ceil(response.data.length / ITEMS_PER_PAGE));

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingBag, User, Lock, AlertCircle, ArrowRight, Moon, Sun, EyeOff, Eye, Coffee } from 'lucide-react';
+import API_BASE_URL from '../config';
 
 const Login = () => {
     const navigate = useNavigate();
@@ -12,10 +13,6 @@ const Login = () => {
     const [rememberMe, setRememberMe] = useState(false);
     const [darkMode, setDarkMode] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    
-    // Simple credentials
-    const ADMIN_USERNAME = "Varun";
-    const ADMIN_PASSWORD = "4546";
 
     useEffect(() => {
         // Check for saved credentials if any
@@ -67,19 +64,19 @@ const Login = () => {
     const validateForm = () => {
         const newErrors = {};
         
-        if (!formData.username.trim() || formData.username !== ADMIN_USERNAME) {
-            newErrors.username = 'Invalid username';
+        if (!formData.username.trim()) {
+            newErrors.username = 'Username is required';
         }
         
-        if (!formData.password || formData.password !== ADMIN_PASSWORD) {
-            newErrors.password = 'Invalid password';
+        if (!formData.password) {
+            newErrors.password = 'Password is required';
         }
         
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         
         if (validateForm()) {
@@ -92,26 +89,43 @@ const Login = () => {
                 localStorage.removeItem('ksp_username');
             }
             
-            // Make an API request to your server's login endpoint
-            // For now, we're simulating a successful login
-            const simulateLoginResponse = () => {
-                // Create session with timestamp
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/admin/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: formData.username,
+                        password: formData.password,
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    setErrors({ password: data.message || 'Invalid credentials' });
+                    setLoginAttempts(prev => prev + 1);
+                    setShake(true);
+                    setTimeout(() => setShake(false), 500);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Store real token and session info
                 const loginTime = new Date().getTime();
                 sessionStorage.setItem('isAuthenticated', 'true');
-                sessionStorage.setItem('adminUser', ADMIN_USERNAME);
+                sessionStorage.setItem('adminUser', data.user.username);
                 sessionStorage.setItem('loginTime', loginTime.toString());
-                
-                // Store a dummy token in sessionStorage - in production this would come from the server
-                sessionStorage.setItem('token', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjEyMzQ1Njc4OTAiLCJlbWFpbCI6ImFkbWluQGtzc', 'uLm9yZyJ9.3tP-jONQJlP4_n5C_OpI');
-                
+                sessionStorage.setItem('token', data.token);
+
                 setTimeout(() => {
                     setIsLoading(false);
                     navigate('/', { replace: true });
                 }, 800);
-            };
-
-            simulateLoginResponse();
-            
+            } catch (error) {
+                console.error('Login error:', error);
+                setErrors({ password: 'Server error. Please try again.' });
+                setIsLoading(false);
+            }
   
         } else {
             setLoginAttempts(prev => prev + 1);

@@ -39,6 +39,7 @@ import {
 import axios from "axios";
 import Navbar from "./Navbar";
 import { Bar, Line, Pie, Doughnut, Radar } from 'react-chartjs-2';
+import API_BASE_URL, { getAuthHeaders } from '../config';
 import { 
   Chart as ChartJS, 
   CategoryScale, 
@@ -842,7 +843,7 @@ const AdminOrdersPage = () => {
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(true);
 
-  const API_URL = "https://render-user-page.onrender.com";
+  const API_URL = API_BASE_URL;
 
   // Fetch orders from the server
   const fetchOrders = async () => {
@@ -852,6 +853,7 @@ const AdminOrdersPage = () => {
     try {
       const response = await axios.get(`${API_URL}/api/orders/admin/all`, {
         timeout: 15008,
+        headers: getAuthHeaders(),
       });
 
       if (!response.data || !response.data.success) {
@@ -885,12 +887,13 @@ const AdminOrdersPage = () => {
   // Fetch customers data
   const fetchCustomers = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/users/admin/all`, {
+      const response = await axios.get(`${API_URL}/api/users`, {
         timeout: 10000,
+        headers: getAuthHeaders(),
       });
       
-      if (response.data && response.data.success) {
-        setCustomers(response.data.users);
+      if (response.data && Array.isArray(response.data)) {
+        setCustomers(response.data);
       }
     } catch (error) {
       console.error("Error fetching customers:", error);
@@ -920,7 +923,7 @@ const AdminOrdersPage = () => {
       const response = await axios.put(
         `${API_URL}/api/orders/admin/${orderId}/status`,
         { status: newStatus },
-        { headers: { 'Content-Type': 'application/json' } }
+        { headers: { 'Content-Type': 'application/json', ...getAuthHeaders() } }
       );
   
       if (response.data.success) {

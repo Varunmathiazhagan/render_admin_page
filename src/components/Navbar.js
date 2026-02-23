@@ -4,6 +4,7 @@ import {
   Home, PlusCircle, ListChecks, ShoppingBag, Users,
   Bell, Menu, X, MessageSquare, LogOut
 } from 'lucide-react';
+import API_BASE_URL, { getAuthHeaders } from '../config';
 
 const Navbar = () => {
   const location = useLocation();
@@ -21,7 +22,9 @@ const Navbar = () => {
     let isMounted = true;
     const fetchNotifications = async () => {
       try {
-        const res = await fetch('https://render-user-page.onrender.com/api/notifications');
+        const res = await fetch(`${API_BASE_URL}/api/notifications`, {
+          headers: getAuthHeaders(),
+        });
         if (!res.ok) throw new Error('Failed to fetch notifications');
         const data = await res.json();
         if (isMounted) {

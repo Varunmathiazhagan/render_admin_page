@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import Navbar from "./Navbar";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
 import { Bar, Pie } from 'react-chartjs-2';
+import API_BASE_URL, { getAuthHeaders } from '../config';
 
 // Register ChartJS components
 ChartJS.register(
@@ -14,9 +15,9 @@ ChartJS.register(
   Title
 );
 
-const API_URL = "https://render-user-page.onrender.com/api/employees";
-const EXPENSE_API_URL = "https://render-user-page.onrender.com/api/expenses";
-const ORDER_API_URL = "https://render-user-page.onrender.com/api/orders/admin/all";
+const API_URL = `${API_BASE_URL}/api/employees`;
+const EXPENSE_API_URL = `${API_BASE_URL}/api/expenses`;
+const ORDER_API_URL = `${API_BASE_URL}/api/orders/admin/all`;
 
 const defaultForm = {
   name: "",
@@ -74,7 +75,7 @@ const Employee = () => {
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL);
+      const res = await fetch(API_URL, { headers: getAuthHeaders() });
       const data = await res.json();
       setEmployees(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -88,7 +89,7 @@ const Employee = () => {
   const fetchExpenses = useCallback(async () => {
     setExpenseLoading(true);
     try {
-      const res = await fetch(EXPENSE_API_URL);
+      const res = await fetch(EXPENSE_API_URL, { headers: getAuthHeaders() });
       const data = await res.json();
       setExpenses(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -102,7 +103,7 @@ const Employee = () => {
   const fetchOrders = useCallback(async () => {
     setOrdersLoading(true);
     try {
-      const res = await fetch(ORDER_API_URL);
+      const res = await fetch(ORDER_API_URL, { headers: getAuthHeaders() });
       const data = await res.json();
       
       // Handle different response structures
@@ -221,7 +222,7 @@ const Employee = () => {
     try {
         const res = await fetch(url, {
             method,
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...getAuthHeaders() },
             body: JSON.stringify(form)
         });
 
@@ -251,7 +252,7 @@ const Employee = () => {
     try {
       const res = await fetch(EXPENSE_API_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(expenseForm)
       });
 
@@ -294,7 +295,7 @@ const Employee = () => {
     if (!window.confirm("Delete this employee?")) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API_URL}/${id}`, { method: "DELETE", headers: getAuthHeaders() });
       if (res.ok) {
         await fetchEmployees();
         showNotification("Employee deleted successfully");
@@ -313,7 +314,7 @@ const Employee = () => {
     if (!window.confirm("Delete this expense?")) return;
     setExpenseLoading(true);
     try {
-      const res = await fetch(`${EXPENSE_API_URL}/${id}`, { method: "DELETE" });
+      const res = await fetch(`${EXPENSE_API_URL}/${id}`, { method: "DELETE", headers: getAuthHeaders() });
       if (res.ok) {
         await fetchExpenses();
         showNotification("Expense deleted successfully");
