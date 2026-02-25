@@ -79,32 +79,6 @@ const registerAdminRoutes = ({
     }
   });
 
-  app.put("/api/contacts/:id/status", authenticateToken, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { status } = req.body;
-
-      const validStatuses = ["new", "inprogress", "completed"];
-      if (!status || !validStatuses.includes(status)) {
-        return res.status(400).json({ error: "Invalid status value" });
-      }
-
-      const contact = await Contact.findByIdAndUpdate(
-        id,
-        { status },
-        { new: true, runValidators: true }
-      );
-
-      if (!contact) {
-        return res.status(404).json({ error: "Contact not found" });
-      }
-
-      res.json({ success: true, message: "Contact status updated", contact });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to update contact status", details: error.message });
-    }
-  });
-
   app.get("/api/users", authenticateToken, async (req, res) => {
     try {
       const users = await User.find({}, "email name createdAt").lean();
@@ -674,7 +648,7 @@ setInterval(() => {
 
 const apiLimiter = createRateLimiter(15 * 60 * 1000, 100);
 
-const PORT = process.env.PORT || 5009;
+const PORT = 5009;
 const JWT_SECRET = "4953546c308be3088b28807c767bd35e99818434d130a588e5e6d90b6d1d326e";
 const MONGO_URI = "mongodb+srv://varun:454697@ksp.gqt0t.mongodb.net/M_v?retryWrites=true&w=majority";
 
@@ -757,7 +731,7 @@ const contactSchema = new mongoose.Schema(
     phone: { type: String, required: true },
     subject: { type: String, required: true },
     message: { type: String, required: true },
-    status: { type: String, default: "new" },
+    status: { type: String, default: "Pending" },
     createdAt: { type: Date, default: Date.now, expires: "7d" },
   },
   { timestamps: true }

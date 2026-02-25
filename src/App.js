@@ -16,23 +16,12 @@ const checkAuth = () => {
   const loginTime = parseInt(sessionStorage.getItem('loginTime') || '0');
   const token = sessionStorage.getItem('token');
   const currentTime = new Date().getTime();
-  
-  // Log auth status for debugging
-  console.log("Auth check:", { 
-    isAuthenticated, 
-    token: token ? "exists" : "missing",
-    loginTime,
-    currentTime,
-    expired: currentTime - loginTime > MAX_SESSION_TIME
-  });
-  
+
   if (!isAuthenticated || !loginTime || !token || (currentTime - loginTime > MAX_SESSION_TIME)) {
-    console.log("Auth check failed, clearing session");
     sessionStorage.clear();
     return false;
   }
-  
-  console.log("Auth check passed");
+
   return true;
 };
 
@@ -43,14 +32,15 @@ const logout = (navigate) => {
 
 const PrivateRoute = ({ children }) => {
   const navigate = useNavigate();
+  const isAuthed = checkAuth();
   
   React.useEffect(() => {
-    if (!checkAuth()) {
+    if (!isAuthed) {
       logout(navigate);
     }
-  }, [navigate]);
+  }, [isAuthed, navigate]);
 
-  if (!checkAuth()) {
+  if (!isAuthed) {
     return null;
   }
   

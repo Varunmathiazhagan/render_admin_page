@@ -140,21 +140,25 @@ const UserPage = () => {
       setUsers(response.data);
       processSignupData(response.data);
       setLoading(false);
+      return response.data;
     } catch (err) {
       setError(err.message || 'Failed to fetch users');
       setLoading(false);
       addNotification(err.message || 'Failed to fetch users', 'error');
+      return [];
     }
   }, [API_URL]);
 
-  const fetchUserAnalytics = useCallback(async () => {
+  const fetchUserAnalytics = useCallback(async (prefetchedUsers = null) => {
     setAnalyticsLoading(true);
     try {
-      const response = await axios.get(`${API_URL}/api/users`, {
-        headers: getAuthHeaders(),
-      });
-      if (response.data) {
-        const userData = response.data;
+      const userData = Array.isArray(prefetchedUsers)
+        ? prefetchedUsers
+        : (await axios.get(`${API_URL}/api/users`, {
+            headers: getAuthHeaders(),
+          })).data;
+
+      if (Array.isArray(userData)) {
         setUserStatistics(processUserStats(userData));
         setActivityLog(generateActivityLog(userData));
         processEmailDomainDistribution(userData);
@@ -222,10 +226,8 @@ const UserPage = () => {
 
   const fetchAllData = useCallback(async () => {
     try {
-      await Promise.all([
-        fetchUsers(),
-        fetchUserAnalytics()
-      ]);
+      const userData = await fetchUsers();
+      await fetchUserAnalytics(userData);
     } catch (err) {
       console.error("Error fetching data:", err);
       addNotification("Failed to load data", "error");
