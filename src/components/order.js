@@ -284,10 +284,6 @@ const AnalyticsDashboard = ({ orders }) => {
   };
   
   const chartData = processChartData();
-  
-  // Calculate key metrics
-  const totalOrders = orders.length;
-  const totalRevenue = orders.reduce((sum, order) => sum + order.totalPrice, 0);
 
   // Enhanced chart options with 3D effects and animations
   const enhancedChartOptions = {
