@@ -13,11 +13,23 @@ const MAX_SESSION_TIME = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
 
 const checkAuth = () => {
   const isAuthenticated = sessionStorage.getItem('isAuthenticated') === 'true';
-  const loginTime = parseInt(sessionStorage.getItem('loginTime') || '0');
+  const loginTimeRaw = sessionStorage.getItem('loginTime');
+  const loginTime = Number(loginTimeRaw);
   const token = sessionStorage.getItem('token');
   const currentTime = new Date().getTime();
 
-  if (!isAuthenticated || !loginTime || !token || (currentTime - loginTime > MAX_SESSION_TIME)) {
+  const hasSessionData = Boolean(isAuthenticated || loginTimeRaw || token);
+
+  if (!hasSessionData) {
+    return false;
+  }
+
+  if (!isAuthenticated || !Number.isFinite(loginTime) || !token) {
+    sessionStorage.clear();
+    return false;
+  }
+
+  if (currentTime - loginTime > MAX_SESSION_TIME) {
     sessionStorage.clear();
     return false;
   }
