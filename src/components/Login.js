@@ -270,14 +270,14 @@ const Login = () => {
                             </label>
                         </div>
                         <div className="mt-2 sm:mt-0">
-                            <a 
-                                href="#" 
+                            <button 
+                                type="button" 
                                 onClick={handleForgotPassword} 
                                 className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 hover:underline transition-all duration-200 inline-flex items-center"
                             >
                                 <Coffee className="h-3.5 w-3.5 mr-1" />
                                 Forgot password?
-                            </a>
+                            </button>
                         </div>
                     </div>
                     

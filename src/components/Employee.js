@@ -52,8 +52,8 @@ const Employee = () => {
   const [expenseLoading, setExpenseLoading] = useState(false);
   const [notification, setNotification] = useState({ show: false, message: "", type: "" });
   const [activeTab, setActiveTab] = useState("employees");
-  const [orders, setOrders] = useState([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [, setOrders] = useState([]);
+  const [, setOrdersLoading] = useState(false);
   const [financialStats, setFinancialStats] = useState({
     totalRevenue: 0,
     totalExpenses: 0,
@@ -63,7 +63,6 @@ const Employee = () => {
     expensesByMonth: {},
     profitsByMonth: {}
   });
-  const [showFinancial, setShowFinancial] = useState(false);
 
   // Show notification helper function
   const showNotification = (message, type = "success") => {
