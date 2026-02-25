@@ -256,6 +256,7 @@ const AdminContacts = () => {
         contentContainer.style.transform = '';
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
   // Page change with animation

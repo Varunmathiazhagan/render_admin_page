@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import {
   FaSearch,
-  FaFilter,
   FaSpinner,
   FaExclamationTriangle,
   FaEdit,
@@ -16,21 +15,15 @@ import {
   FaSortUp,
   FaSortDown,
   FaUser,
-  FaChartLine,
   FaCalendarAlt,
   FaPhoneAlt,
   FaEnvelope,
-  FaMapMarkerAlt,
   FaDollarSign,
   FaHistory,
-  FaArrowUp,
-  FaArrowDown,
-  FaChartPie,
   FaMoneyBillWave,
   FaClock,
   FaCartPlus,
   FaShoppingBasket,
-  FaUsers,
   FaPercent,
   FaRegClock,
   FaRegCalendarAlt,
@@ -38,7 +31,7 @@ import {
 } from "react-icons/fa";
 import axios from "axios";
 import Navbar from "./Navbar";
-import { Bar, Line, Pie, Doughnut, Radar } from 'react-chartjs-2';
+import { Bar, Line, Doughnut, Radar } from 'react-chartjs-2';
 import API_BASE_URL, { getAuthHeaders } from '../config';
 import { 
   Chart as ChartJS, 
@@ -145,18 +138,23 @@ const AnalyticsDashboard = ({ orders }) => {
 
   // Add useEffect to destroy charts on unmount
   useEffect(() => {
+    const radarChart = radarChartRef.current;
+    const hourlyChart = hourlyChartRef.current;
+    const statusChart = statusChartRef.current;
+    const revenueChart = revenueChartRef.current;
+
     return () => {
-      if (radarChartRef.current) {
-        radarChartRef.current.destroy();
+      if (radarChart) {
+        radarChart.destroy();
       }
-      if (hourlyChartRef.current) {
-        hourlyChartRef.current.destroy();
+      if (hourlyChart) {
+        hourlyChart.destroy();
       }
-      if (statusChartRef.current) {
-        statusChartRef.current.destroy();
+      if (statusChart) {
+        statusChart.destroy();
       }
-      if (revenueChartRef.current) {
-        revenueChartRef.current.destroy();
+      if (revenueChart) {
+        revenueChart.destroy();
       }
     };
   }, []);
@@ -290,8 +288,6 @@ const AnalyticsDashboard = ({ orders }) => {
   // Calculate key metrics
   const totalOrders = orders.length;
   const totalRevenue = orders.reduce((sum, order) => sum + order.totalPrice, 0);
-  const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-  const processingOrders = orders.filter(order => order.orderStatus === 'processing').length;
 
   // Enhanced chart options with 3D effects and animations
   const enhancedChartOptions = {
@@ -906,6 +902,7 @@ const AdminOrdersPage = () => {
   // Fetch orders on component mount
   useEffect(() => {
     fetchOrders();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Handle sorting
@@ -966,54 +963,10 @@ const AdminOrdersPage = () => {
     }
   };
 
-  // Handle canceling edit mode
-  const handleCancelEdit = () => {
-    setEditingOrder(null);
-  };
-
   // Handle viewing order details
   const handleViewOrderDetails = (order) => {
     setSelectedOrderDetails(order);
     setShowOrderDetails(true);
-  };
-
-  // Calculate order trends
-  const calculateTrends = () => {
-    if (orders.length < 2) return { orders: 0, revenue: 0 };
-    
-    // Get today and yesterday's orders
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    const todayOrders = orders.filter(order => 
-      new Date(order.createdAt) >= today
-    );
-    
-    const yesterdayOrders = orders.filter(order => 
-      new Date(order.createdAt) >= yesterday && new Date(order.createdAt) < today
-    );
-    
-    const todayCount = todayOrders.length;
-    const yesterdayCount = yesterdayOrders.length;
-    
-    const todayRevenue = todayOrders.reduce((sum, order) => sum + order.totalPrice, 0);
-    const yesterdayRevenue = yesterdayOrders.reduce((sum, order) => sum + order.totalPrice, 0);
-    
-    // Calculate percentage changes
-    const orderChange = yesterdayCount === 0 
-      ? 100 // If yesterday was 0, show 100% increase
-      : ((todayCount - yesterdayCount) / yesterdayCount) * 100;
-      
-    const revenueChange = yesterdayRevenue === 0
-      ? 100 // If yesterday was 0, show 100% increase
-      : ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100;
-      
-    return { 
-      orders: orderChange.toFixed(1),
-      revenue: revenueChange.toFixed(1) 
-    };
   };
 
   // Filter and sort orders
@@ -1081,9 +1034,6 @@ const AdminOrdersPage = () => {
     if (!date) return "N/A";
     return new Date(date).toLocaleString();
   };
-
-  // Get trend indicators
-  const trends = calculateTrends();
 
   // Add this helper function to calculate status metrics
   const calculateStatusMetrics = () => {

@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, 
          PointElement, LineElement, BarElement, Title, Filler } from 'chart.js';
-import { Bar, Line, Doughnut, Pie } from 'react-chartjs-2';
+import { Bar, Pie } from 'react-chartjs-2';
 import API_BASE_URL, { getAuthHeaders } from '../config';
 
 // Register ChartJS components
@@ -295,7 +295,6 @@ const AdminHome = () => {
     const [taskError, setTaskError] = useState(null);
     const [lowStockProducts, setLowStockProducts] = useState([]); // For stock management
     const [expenseCategories, setExpenseCategories] = useState({});
-    const [expenseTrends, setExpenseTrends] = useState([]);
     const [revenueVsExpense, setRevenueVsExpense] = useState({
         labels: [],
         revenues: [],
@@ -314,11 +313,6 @@ const AdminHome = () => {
         profitMargin: 0,
         monthlyProfits: [],
         profitTrend: 0
-    });
-    const [chartRefs, setChartRefs] = useState({
-        expensePieRef: null,
-        revenueExpenseComparisonRef: null,
-        monthlyTrendsRef: null
     });
     const [activeChartTimeframe, setActiveChartTimeframe] = useState('month');
     
@@ -564,39 +558,6 @@ const AdminHome = () => {
                 maxAmount = amount;
                 topCategory = category;
             }
-        });
-        
-        // Group expenses by month for trends
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-        
-        const monthlyExpenses = {};
-        
-        expenseData.forEach(expense => {
-            const date = new Date(expense.date);
-            if (date >= sixMonthsAgo) {
-                const monthYear = `${date.getMonth() + 1}/${date.getFullYear()}`;
-                if (monthlyExpenses[monthYear]) {
-                    monthlyExpenses[monthYear] += Number(expense.amount);
-                } else {
-                    monthlyExpenses[monthYear] = Number(expense.amount);
-                }
-            }
-        });
-        
-        // Sort by date and extract labels and amounts
-        const sortedMonths = Object.keys(monthlyExpenses).sort((a, b) => {
-            const [aMonth, aYear] = a.split('/').map(Number);
-            const [bMonth, bYear] = b.split('/').map(Number);
-            return (aYear !== bYear) ? aYear - bYear : aMonth - bMonth;
-        });
-        
-        const trendLabels = sortedMonths;
-        const trendAmounts = sortedMonths.map(month => monthlyExpenses[month]);
-        
-        setExpenseTrends({
-            labels: trendLabels,
-            amounts: trendAmounts
         });
         
         // Calculate average expense amount
@@ -954,6 +915,7 @@ const AdminHome = () => {
         if (orders && expenses) {
             compareRevenueAndExpenses();
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [orders, expenses]);
 
     useEffect(() => {
@@ -1160,8 +1122,14 @@ const AdminHome = () => {
         if (loading) displayValue = <div className="animate-pulse flex space-x-1"><div className="h-5 w-16 bg-gray-200 rounded"></div></div>;
         if (error) displayValue = <div className="text-red-500 text-sm flex items-center">Error <button onClick={onRetry} className="ml-2 p-1 rounded-full hover:bg-gray-100"><RefreshCw size={14} /></button></div>;
         
-        // Calculate maximum height for scaling the sparkline
-        const maxHeight = trend ? Math.max(...trend.data) : 0;
+        // Normalize trend data to avoid invalid SVG coordinates
+        const trendData = Array.isArray(trend?.data)
+            ? trend.data.map((point) => {
+                const numericPoint = Number(point);
+                return Number.isFinite(numericPoint) ? numericPoint : 0;
+            })
+            : [];
+        const maxHeight = trendData.length > 0 ? Math.max(1, ...trendData) : 1;
         
         const getIconBgColor = () => {
             switch(iconClass) {
@@ -1202,14 +1170,14 @@ const AdminHome = () => {
                     <div className="text-3xl font-bold mb-2 text-gray-800">{displayValue}</div>
                 </div>
                 
-                {trend && (
+                {trend && trendData.length > 1 && (
                     <div className="absolute bottom-0 left-0 w-full h-12 opacity-70">
                         <svg 
                             className="w-full h-full" 
                             viewBox="0 0 100 40"
                             preserveAspectRatio="none"
                         >
-                            {trend.data.map((value, index, array) => {
+                            {trendData.map((value, index, array) => {
                                 if (index === 0) return null;
                                 const x1 = ((index - 1) / (array.length - 1)) * 100 + '%';
                                 const y1 = 40 - ((array[index - 1] / maxHeight) * 30);
@@ -1913,7 +1881,7 @@ const AdminHome = () => {
                 </svg>
             </div>
             
-            <style jsx>{`
+            <style>{`
                 .gradient-text-gold {
                     background: -webkit-linear-gradient(#F59E0B, #D97706);
                     -webkit-background-clip: text;
