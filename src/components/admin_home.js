@@ -266,6 +266,32 @@ const isTrendUp = (series) => {
     return series[series.length - 1] >= series[0];
 };
 
+const normalizeArrayPayload = (payload, keys = []) => {
+    if (Array.isArray(payload)) return payload;
+    if (!payload || typeof payload !== 'object') return [];
+
+    for (const key of keys) {
+        if (Array.isArray(payload[key])) return payload[key];
+    }
+
+    return [];
+};
+
+const parseDateFromFields = (item, fields = []) => {
+    if (!item || typeof item !== 'object') return null;
+
+    for (const field of fields) {
+        const value = item[field];
+        if (!value) continue;
+        const parsed = new Date(value);
+        if (!Number.isNaN(parsed.getTime())) {
+            return parsed;
+        }
+    }
+
+    return null;
+};
+
 const AdminHome = () => {
     // Add new state for employees
     const [employees, setEmployees] = useState(null);
@@ -455,11 +481,8 @@ const AdminHome = () => {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const data = await response.json();
-            if (data && data.success && Array.isArray(data.orders)) {
-                setOrders(data.orders);
-            } else {
-                setOrders(Array.isArray(data) ? data : []);
-            }
+            const normalizedOrders = normalizeArrayPayload(data, ['orders', 'data', 'results']);
+            setOrders(normalizedOrders);
             setOrdersError(null);
             setOrderRetryCount(0);
         } catch (error) {
@@ -485,12 +508,13 @@ const AdminHome = () => {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const data = await response.json();
-            setExpenses(Array.isArray(data) ? data : []);
+            const normalizedExpenses = normalizeArrayPayload(data, ['expenses', 'data', 'results']);
+            setExpenses(normalizedExpenses);
             setExpensesError(null);
             setExpenseRetryCount(0);
             
             // Process expense categories after loading
-            processExpenseData(Array.isArray(data) ? data : []);
+            processExpenseData(normalizedExpenses);
         } catch (error) {
             console.error('Expenses error:', error);
             const errorMessage = 'Failed to load expense data. Please try again.';
@@ -520,12 +544,13 @@ const AdminHome = () => {
         expenseData.forEach(expense => {
             // Extract or infer category
             const category = expense.category || categorizeExpense(expense.title);
-            totalAmount += Number(expense.amount);
+            const amount = Number(expense.amount) || 0;
+            totalAmount += amount;
             
             if (categories[category]) {
-                categories[category] += Number(expense.amount);
+                categories[category] += amount;
             } else {
-                categories[category] = Number(expense.amount);
+                categories[category] = amount;
             }
         });
         
@@ -555,7 +580,7 @@ const AdminHome = () => {
 
     // Infer category from expense title
     const categorizeExpense = (title) => {
-        const lowerTitle = title.toLowerCase();
+        const lowerTitle = String(title || '').toLowerCase();
         
         if (lowerTitle.includes('salary') || lowerTitle.includes('payroll') || lowerTitle.includes('wage')) {
             return 'Payroll';
@@ -581,27 +606,27 @@ const AdminHome = () => {
         if (!orders || !expenses) return;
         
         // Get order data
-        const ordersArray = Array.isArray(orders) ? orders : 
-                           (orders.orders && Array.isArray(orders.orders)) ? orders.orders : [];
+        const ordersArray = normalizeArrayPayload(orders, ['orders', 'data', 'results']);
         
         // Get expense data
-        const expensesArray = Array.isArray(expenses) ? expenses : [];
-        
-        // Get data for the last 6 months
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        const expensesArray = normalizeArrayPayload(expenses, ['expenses', 'data', 'results']);
+
+        // Map UI timeframe to history window
+        const monthsToInclude = activeChartTimeframe === 'year' ? 60 : activeChartTimeframe === 'quarter' ? 24 : 6;
+        const fromDate = new Date();
+        fromDate.setMonth(fromDate.getMonth() - monthsToInclude);
         
         // Group orders by month
         const monthlyRevenue = {};
         
         ordersArray.forEach(order => {
-            const date = new Date(order.createdAt);
-            if (date >= sixMonthsAgo) {
+            const date = parseDateFromFields(order, ['createdAt', 'date', 'updatedAt']);
+            if (date && date >= fromDate) {
                 const monthYear = `${date.getMonth() + 1}/${date.getFullYear()}`;
                 if (monthlyRevenue[monthYear]) {
-                    monthlyRevenue[monthYear] += Number(order.totalPrice);
+                    monthlyRevenue[monthYear] += Number(order.totalPrice) || 0;
                 } else {
-                    monthlyRevenue[monthYear] = Number(order.totalPrice);
+                    monthlyRevenue[monthYear] = Number(order.totalPrice) || 0;
                 }
             }
         });
@@ -610,17 +635,34 @@ const AdminHome = () => {
         const monthlyExpense = {};
         
         expensesArray.forEach(expense => {
-            const date = new Date(expense.date);
-            if (date >= sixMonthsAgo) {
+            const date = parseDateFromFields(expense, ['date', 'createdAt', 'updatedAt']);
+            if (date && date >= fromDate) {
                 const monthYear = `${date.getMonth() + 1}/${date.getFullYear()}`;
                 if (monthlyExpense[monthYear]) {
-                    monthlyExpense[monthYear] += Number(expense.amount);
+                    monthlyExpense[monthYear] += Number(expense.amount) || 0;
                 } else {
-                    monthlyExpense[monthYear] = Number(expense.amount);
+                    monthlyExpense[monthYear] = Number(expense.amount) || 0;
                 }
             }
         });
         
+        // If no recent data exists for selected timeframe, fall back to full available history
+        if (Object.keys(monthlyRevenue).length === 0 && Object.keys(monthlyExpense).length === 0) {
+            ordersArray.forEach(order => {
+                const date = parseDateFromFields(order, ['createdAt', 'date', 'updatedAt']);
+                if (!date) return;
+                const monthYear = `${date.getMonth() + 1}/${date.getFullYear()}`;
+                monthlyRevenue[monthYear] = (monthlyRevenue[monthYear] || 0) + (Number(order.totalPrice) || 0);
+            });
+
+            expensesArray.forEach(expense => {
+                const date = parseDateFromFields(expense, ['date', 'createdAt', 'updatedAt']);
+                if (!date) return;
+                const monthYear = `${date.getMonth() + 1}/${date.getFullYear()}`;
+                monthlyExpense[monthYear] = (monthlyExpense[monthYear] || 0) + (Number(expense.amount) || 0);
+            });
+        }
+
         // Get all unique months
         const allMonths = [...new Set([...Object.keys(monthlyRevenue), ...Object.keys(monthlyExpense)])];
         
@@ -886,7 +928,7 @@ const AdminHome = () => {
             compareRevenueAndExpenses();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [orders, expenses]);
+    }, [orders, expenses, activeChartTimeframe]);
 
     useEffect(() => {
         if (orders && previousMonthOrders && users && previousMonthUsers && previousMonthRatings) {
