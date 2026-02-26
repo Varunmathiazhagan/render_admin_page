@@ -3,6 +3,9 @@ import Navbar from "./Navbar";
 import { Package, X, Edit2, Trash2, Plus, Star, DollarSign, Tag, Box, Loader, AlertCircle, ChevronRight } from "lucide-react";
 import API_BASE_URL, { getAuthHeaders } from '../config';
 
+const PRODUCTS_CACHE_KEY = 'admin_products_cache_v1';
+const PRODUCTS_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+
 const ManageProducts = () => {
   const [products, setProducts] = useState([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -54,7 +57,24 @@ const ManageProducts = () => {
     }
   }, [loading, products]);
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (forceRefresh = false) => {
+    // Try session cache first
+    if (!forceRefresh) {
+      try {
+        const cachedRaw = sessionStorage.getItem(PRODUCTS_CACHE_KEY);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached?.timestamp && Array.isArray(cached?.data)) {
+            if (Date.now() - cached.timestamp < PRODUCTS_CACHE_TTL) {
+              setProducts(cached.data);
+              setLoading(false);
+              return;
+            }
+          }
+        }
+      } catch (e) { console.warn('Products cache read error:', e); }
+    }
+
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/admin/products`, {
@@ -64,6 +84,7 @@ const ManageProducts = () => {
       const data = await response.json();
       if (Array.isArray(data)) {
         setProducts(data);
+        sessionStorage.setItem(PRODUCTS_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
       } else {
         throw new Error("Invalid data format received");
       }
@@ -108,7 +129,8 @@ const ManageProducts = () => {
 
       alert("Product updated successfully!");
       setIsEditModalOpen(false);
-      fetchProducts();
+      sessionStorage.removeItem(PRODUCTS_CACHE_KEY);
+      fetchProducts(true);
     } catch (error) {
       console.error("Update error:", error);
       alert("Error updating product: " + error.message);
@@ -147,7 +169,8 @@ const ManageProducts = () => {
 
       alert("Product added successfully!");
       setIsAddModalOpen(false);
-      fetchProducts();
+      sessionStorage.removeItem(PRODUCTS_CACHE_KEY);
+      fetchProducts(true);
     } catch (error) {
       console.error("Add product error:", error);
       setErrorMessage(`Error adding product: ${error.message}`);
@@ -220,7 +243,8 @@ const ManageProducts = () => {
         throw new Error(data.error || "Failed to delete product");
       }
       alert("Product deleted successfully!");
-      fetchProducts();
+      sessionStorage.removeItem(PRODUCTS_CACHE_KEY);
+      fetchProducts(true);
     } catch (error) {
       console.error("Delete error:", error);
       alert(`Error deleting product: ${error.message}`);

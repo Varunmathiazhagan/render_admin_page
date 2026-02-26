@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Navbar from './Navbar';
 import { Box, ShoppingCart, Users, MessageSquare, BarChart2, Settings, Package, 
          AlertTriangle, TrendingUp, ChevronRight, RefreshCw, ArrowUp, ArrowDown,
          Moon, Sun, Calendar, Bell, HelpCircle, Clock, CheckSquare,
-         Zap, Activity, Edit3, Archive, User, Star, DollarSign, CreditCard, Layers } from 'lucide-react';
+         Zap, Activity, Edit3, Archive, User, Star, DollarSign, CreditCard, Layers, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, 
@@ -336,57 +336,39 @@ const AdminHome = () => {
     const [loadingMetrics, setLoadingMetrics] = useState(true);
     const [metricsError, setMetricsError] = useState(null);
     
-    const [upcomingEvents] = useState([
-        { id: 1, title: 'Marketing Campaign Launch', date: '2023-10-01', type: 'marketing' },
-        { id: 2, title: 'Inventory Audit', date: '2023-10-15', type: 'inventory' },
-        { id: 3, title: 'Staff Meeting', date: '2023-09-30', type: 'internal' },
-        { id: 4, title: 'New Product Launch', date: '2023-10-20', type: 'product' },
-    ]);
+    const [upcomingEvents] = useState(() => {
+        const now = new Date();
+        const addDays = (d, days) => { const r = new Date(d); r.setDate(r.getDate() + days); return r.toISOString().split('T')[0]; };
+        return [
+            { id: 1, title: 'Marketing Campaign Launch', date: addDays(now, 5), type: 'marketing' },
+            { id: 2, title: 'Inventory Audit', date: addDays(now, 19), type: 'inventory' },
+            { id: 3, title: 'Staff Meeting', date: addDays(now, 3), type: 'internal' },
+            { id: 4, title: 'New Product Launch', date: addDays(now, 24), type: 'product' },
+        ];
+    });
 
-    // Define sparkline trends from fetched data
-    const productTrend = buildMonthlyTrendData(products);
-    const userTrend = buildMonthlyTrendData(users);
-    const messageTrend = buildMonthlyTrendData(contacts);
-    const orderTrend = buildMonthlyTrendData(orders);
-    const revenueTrend = buildMonthlyTrendData(orders, (order) => Number(order.totalPrice) || 0);
-    const expenseTrend = buildMonthlyTrendData(expenses, (expense) => Number(expense.amount) || 0);
-    const taskTrend = buildMonthlyTrendData(pendingTasks);
-    const stockAlertTrend = Array(12).fill(Array.isArray(lowStockProducts) ? lowStockProducts.length : 0);
+    // Define sparkline trends from fetched data (memoized to avoid recomputation on every render)
+    const statTrends = useMemo(() => {
+        const productTrend = buildMonthlyTrendData(products);
+        const userTrend = buildMonthlyTrendData(users);
+        const messageTrend = buildMonthlyTrendData(contacts);
+        const orderTrend = buildMonthlyTrendData(orders);
+        const revenueTrend = buildMonthlyTrendData(orders, (order) => Number(order.totalPrice) || 0);
+        const expenseTrend = buildMonthlyTrendData(expenses, (expense) => Number(expense.amount) || 0);
+        const taskTrend = buildMonthlyTrendData(pendingTasks);
+        const stockAlertTrend = Array(12).fill(Array.isArray(lowStockProducts) ? lowStockProducts.length : 0);
 
-    const statTrends = {
-        products: {
-            data: productTrend,
-            isUp: isTrendUp(productTrend)
-        },
-        users: {
-            data: userTrend,
-            isUp: isTrendUp(userTrend)
-        },
-        messages: {
-            data: messageTrend,
-            isUp: isTrendUp(messageTrend)
-        },
-        orders: {
-            data: orderTrend,
-            isUp: isTrendUp(orderTrend)
-        },
-        revenue: {
-            data: revenueTrend,
-            isUp: isTrendUp(revenueTrend)
-        },
-        expenses: {
-            data: expenseTrend,
-            isUp: isTrendUp(expenseTrend)
-        },
-        tasks: {
-            data: taskTrend,
-            isUp: isTrendUp(taskTrend)
-        },
-        stockAlerts: {
-            data: stockAlertTrend,
-            isUp: isTrendUp(stockAlertTrend)
-        }
-    };
+        return {
+            products: { data: productTrend, isUp: isTrendUp(productTrend) },
+            users: { data: userTrend, isUp: isTrendUp(userTrend) },
+            messages: { data: messageTrend, isUp: isTrendUp(messageTrend) },
+            orders: { data: orderTrend, isUp: isTrendUp(orderTrend) },
+            revenue: { data: revenueTrend, isUp: isTrendUp(revenueTrend) },
+            expenses: { data: expenseTrend, isUp: isTrendUp(expenseTrend) },
+            tasks: { data: taskTrend, isUp: isTrendUp(taskTrend) },
+            stockAlerts: { data: stockAlertTrend, isUp: isTrendUp(stockAlertTrend) }
+        };
+    }, [products, users, contacts, orders, expenses, pendingTasks, lowStockProducts]);
 
     // Get current time to display greeting
     const currentHour = new Date().getHours();
@@ -755,31 +737,20 @@ const AdminHome = () => {
                 setPreviousMonthOrders([]);
             }
             
-            // Try to get historical users data
+            // Reuse users from loadUsersData instead of fetching again
             try {
-                const usersResponse = await fetch(`${API_BASE_URL}/api/users`, {
-                    headers: getAuthHeaders(),
-                });
-                if (usersResponse.ok) {
-                    const usersData = await usersResponse.json();
-                    if (Array.isArray(usersData)) {
-                        // Filter users based on creation date
-                        const filteredUsers = usersData.filter(user => {
-                            if (!user.createdAt) return false;
-                            const creationDate = new Date(user.createdAt);
-                            return creationDate >= new Date(startDate) && creationDate <= new Date(endDate);
-                        });
-                        setPreviousMonthUsers(filteredUsers);
-                    } else {
-                        console.warn('Users endpoint returned unexpected format');
-                        setPreviousMonthUsers([]);
-                    }
+                if (Array.isArray(users) && users.length > 0) {
+                    const filteredUsers = users.filter(user => {
+                        if (!user.createdAt) return false;
+                        const creationDate = new Date(user.createdAt);
+                        return creationDate >= new Date(startDate) && creationDate <= new Date(endDate);
+                    });
+                    setPreviousMonthUsers(filteredUsers);
                 } else {
-                    console.warn('Users endpoint failed');
                     setPreviousMonthUsers([]);
                 }
             } catch (error) {
-                console.warn('Error fetching historical users:', error);
+                console.warn('Error filtering historical users:', error);
                 setPreviousMonthUsers([]);
             }
             
@@ -886,7 +857,6 @@ const AdminHome = () => {
         loadExpensesData(); // Add expense data loading
         loadHistoricalData();
         loadPendingTasks();
-        loadRecentActivities();
         loadLowStockProducts();
         loadEmployeesData(); // Add this line
     }, []);
@@ -923,6 +893,11 @@ const AdminHome = () => {
             memoizedCalculatePerformanceMetrics();
         }
     }, [orders, previousMonthOrders, users, previousMonthUsers, previousMonthRatings, memoizedCalculatePerformanceMetrics]);
+
+    // Derive activities whenever underlying data changes (no extra API calls)
+    useEffect(() => {
+        deriveRecentActivities();
+    }, [deriveRecentActivities]);
 
     const toggleDarkMode = () => {
         setDarkMode(prev => {
@@ -964,7 +939,6 @@ const AdminHome = () => {
                 priority: 'medium',
                 due: new Date().toISOString().split('T')[0]
             });
-            loadRecentActivities(); // Refresh recent activities
         } catch (error) {
             console.error("Error adding task:", error);
             alert("Failed to add task. Please try again.");
@@ -1015,33 +989,20 @@ const AdminHome = () => {
         }
     };
 
-    const loadRecentActivities = async () => {
+    // Derive recent activities from already-loaded state (eliminates 4 duplicate API calls)
+    const deriveRecentActivities = useCallback(() => {
+        if (!products && !pendingTasks && !users && !orders) {
+            return; // Data not yet loaded
+        }
+
         try {
-            setLoadingActivities(true);
-            setActivitiesError(null);
-
-            const [tasksResponse, productsResponse, usersResponse, ordersResponse] = await Promise.all([
-                fetch(`${API_BASE_URL}/api/tasks`, { headers: getAuthHeaders() }),
-                fetch(`${API_BASE_URL}/api/admin/products`, { headers: getAuthHeaders() }),
-                fetch(`${API_BASE_URL}/api/users`, { headers: getAuthHeaders() }),
-                fetch(`${API_BASE_URL}/api/orders/admin/all`, { headers: getAuthHeaders() }),
-            ]);
-
-            if (!tasksResponse.ok || !productsResponse.ok || !usersResponse.ok || !ordersResponse.ok) {
-                throw new Error("Failed to fetch recent activities");
-            }
-
-            const [tasks, products, users, ordersData] = await Promise.all([
-                tasksResponse.json(),
-                productsResponse.json(),
-                usersResponse.json(),
-                ordersResponse.json(),
-            ]);
-
-            const orders = Array.isArray(ordersData.orders) ? ordersData.orders : ordersData;
+            const tasksList = Array.isArray(pendingTasks) ? pendingTasks : [];
+            const productsList = Array.isArray(products) ? products : [];
+            const usersList = Array.isArray(users) ? users : [];
+            const ordersList = Array.isArray(orders) ? orders : [];
 
             const formattedActivities = [
-                ...tasks.map(task => ({
+                ...tasksList.map(task => ({
                     id: task._id,
                     type: 'task',
                     message: task.completed
@@ -1050,7 +1011,7 @@ const AdminHome = () => {
                     time: new Date(task.updatedAt || task.createdAt).toLocaleString(),
                     status: task.completed ? 'success' : 'info',
                 })),
-                ...products.map(product => ({
+                ...productsList.map(product => ({
                     id: product._id,
                     type: 'product',
                     message: product.stock <= 0
@@ -1059,14 +1020,14 @@ const AdminHome = () => {
                     time: new Date(product.updatedAt || product.createdAt).toLocaleString(),
                     status: product.stock <= 0 ? 'error' : 'info',
                 })),
-                ...users.map(user => ({
+                ...usersList.map(user => ({
                     id: user._id,
                     type: 'user',
                     message: `New User: ${user.name || user.email}`,
                     time: new Date(user.createdAt).toLocaleString(),
                     status: 'info',
                 })),
-                ...orders.map(order => ({
+                ...ordersList.map(order => ({
                     id: order._id,
                     type: 'order',
                     message: `Order placed: #${order.orderReference}`,
@@ -1076,14 +1037,15 @@ const AdminHome = () => {
             ];
 
             formattedActivities.sort((a, b) => new Date(b.time) - new Date(a.time));
-            setRecentActivities(formattedActivities);
+            setRecentActivities(formattedActivities.slice(0, 20));
+            setActivitiesError(null);
         } catch (error) {
-            console.error("Error loading recent activities:", error);
+            console.error("Error deriving recent activities:", error);
             setActivitiesError("Failed to load recent activities.");
         } finally {
             setLoadingActivities(false);
         }
-    };
+    }, [products, pendingTasks, users, orders]);
 
     const loadLowStockProducts = async () => {
         try {
@@ -1130,6 +1092,15 @@ const AdminHome = () => {
             })
             : [];
         const maxHeight = trendData.length > 0 ? Math.max(1, ...trendData) : 1;
+
+        // Calculate actual trend percentage from data
+        const trendPercentage = (() => {
+            if (trendData.length < 2) return '0';
+            const prev = trendData[trendData.length - 2];
+            const curr = trendData[trendData.length - 1];
+            if (prev === 0) return curr > 0 ? '100' : '0';
+            return Math.abs(((curr - prev) / prev) * 100).toFixed(1);
+        })();
         
         const getIconBgColor = () => {
             switch(iconClass) {
@@ -1162,7 +1133,7 @@ const AdminHome = () => {
                                 trend.isUp ? 'text-green-500 bg-green-50' : 'text-red-500 bg-red-50'
                             } flex items-center text-xs font-medium py-1 px-2 rounded-full shadow-sm`}>
                                 {trend.isUp ? <ArrowUp size={14} className="mr-1" /> : <ArrowDown size={14} className="mr-1" />}
-                                <span>8.2%</span>
+                                <span>{trendPercentage}%</span>
                             </div>
                         )}
                     </div>
@@ -1243,8 +1214,8 @@ const AdminHome = () => {
                 </div>
                 <h3 className="text-xl font-bold mb-3">{title}</h3>
                 <p className="text-gray-600 mb-6 flex-grow">{description}</p>
-                <a 
-                    href={link} 
+                <Link 
+                    to={link} 
                     className="flex items-center text-white py-2.5 px-5 rounded-lg shadow-sm
                              bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800
                              transition-all duration-300 w-fit"
@@ -1254,7 +1225,7 @@ const AdminHome = () => {
                     <ChevronRight size={18} className={`ml-2 transition-transform duration-300 ${
                         isHovered ? 'transform translate-x-1' : ''
                     }`}/>
-                </a>
+                </Link>
             </div>
         );
     };
@@ -1335,8 +1306,9 @@ const AdminHome = () => {
                         <button
                             className="p-1 text-gray-400 hover:text-red-500"
                             onClick={() => deleteTask(task._id)}
+                            title="Delete task"
                         >
-                            <Edit3 size={14} />
+                            <Trash2 size={14} />
                         </button>
                     </div>
                 </div>
@@ -2095,7 +2067,7 @@ const AdminHome = () => {
                             <h3 className="font-semibold text-lg gradient-text-blue">Recent Activity</h3>
                             <button 
                                 className="p-1 rounded hover:bg-gray-100"
-                                onClick={loadRecentActivities}
+                                onClick={deriveRecentActivities}
                             >
                                 <RefreshCw size={16} className={loadingActivities ? "animate-spin" : ""} />
                             </button>
@@ -2109,7 +2081,7 @@ const AdminHome = () => {
                                 <div className="text-center py-4 text-red-500">
                                     {activitiesError}
                                     <button
-                                        onClick={loadRecentActivities}
+                                        onClick={deriveRecentActivities}
                                         className="block mx-auto mt-2 text-indigo-600 hover:text-indigo-800"
                                     >
                                         Try Again

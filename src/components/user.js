@@ -54,6 +54,9 @@ ChartJS.register(
   annotationPlugin
 );
 
+const USER_CACHE_KEY = 'admin_users_cache_v1';
+const USER_CACHE_TTL_MS = 5 * 60 * 1000;
+
 const UserPage = () => {
   const [users, setUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -83,6 +86,18 @@ const UserPage = () => {
   const chartContainerRef = useRef(null);
 
   const API_URL = API_BASE_URL;
+
+  const isDemoUser = useCallback((user) => {
+    const email = String(user?.email || '').toLowerCase();
+    const name = String(user?.name || '').toLowerCase();
+    return (
+      email.endsWith('@tapacademy.com') ||
+      email.includes('+test') ||
+      email.startsWith('test') ||
+      name.includes('test user') ||
+      name.includes('demo user')
+    );
+  }, []);
 
   const calculateMonthlyGrowth = useCallback((userData) => {
     const now = new Date();
@@ -130,24 +145,55 @@ const UserPage = () => {
     };
   }, [calculateMonthlyGrowth]);
 
-  const fetchUsers = useCallback(async () => {
+  const fetchUsers = useCallback(async (forceRefresh = false) => {
+    if (!forceRefresh) {
+      try {
+        const cachedRaw = sessionStorage.getItem(USER_CACHE_KEY);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached?.timestamp && Array.isArray(cached?.data)) {
+            const isFresh = Date.now() - cached.timestamp < USER_CACHE_TTL_MS;
+            if (isFresh) {
+              setUsers(cached.data);
+              processSignupData(cached.data);
+              return cached.data;
+            }
+          }
+        }
+      } catch (cacheError) {
+        console.warn('Failed to read user cache:', cacheError);
+      }
+    }
+
     setLoading(true);
     setError(null);
     try {
       const response = await axios.get(`${API_URL}/api/users`, {
         headers: getAuthHeaders(),
+        params: forceRefresh ? { forceRefresh: 'true' } : undefined,
+        timeout: 10000,
       });
-      setUsers(response.data);
-      processSignupData(response.data);
+      const realUsers = Array.isArray(response.data)
+        ? response.data.filter((user) => !isDemoUser(user))
+        : [];
+      setUsers(realUsers);
+      processSignupData(realUsers);
+      sessionStorage.setItem(
+        USER_CACHE_KEY,
+        JSON.stringify({
+          data: realUsers,
+          timestamp: Date.now(),
+        })
+      );
       setLoading(false);
-      return response.data;
+      return realUsers;
     } catch (err) {
       setError(err.message || 'Failed to fetch users');
       setLoading(false);
       addNotification(err.message || 'Failed to fetch users', 'error');
       return [];
     }
-  }, [API_URL]);
+  }, [API_URL, isDemoUser]);
 
   const fetchUserAnalytics = useCallback(async (prefetchedUsers = null) => {
     setAnalyticsLoading(true);
@@ -224,9 +270,9 @@ const UserPage = () => {
     }
   }, [API_URL, processUserStats]);
 
-  const fetchAllData = useCallback(async () => {
+  const fetchAllData = useCallback(async (forceRefresh = false) => {
     try {
-      const userData = await fetchUsers();
+      const userData = await fetchUsers(forceRefresh);
       await fetchUserAnalytics(userData);
     } catch (err) {
       console.error("Error fetching data:", err);
@@ -362,7 +408,7 @@ const UserPage = () => {
   const refreshUserData = async () => {
     setRefreshing(true);
     try {
-      await fetchAllData();
+      await fetchAllData(true);
       addNotification('Data refreshed successfully');
     } catch (err) {
       addNotification('Failed to refresh data', 'error');

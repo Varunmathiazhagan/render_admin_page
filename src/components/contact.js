@@ -15,6 +15,8 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointE
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000; // 2 seconds
 const ITEMS_PER_PAGE = 10;
+const CONTACTS_CACHE_KEY = 'admin_contacts_cache_v1';
+const CONTACTS_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
 
 const normalizeContactStatus = (status) => {
   const normalized = String(status || '').trim().toLowerCase();
@@ -85,13 +87,47 @@ const AdminContacts = () => {
   });
 
   const fetchContacts = async (retry = false) => {
+    // Try session cache first (skip on retry/refresh)
+    if (!retry) {
+      try {
+        const cachedRaw = sessionStorage.getItem(CONTACTS_CACHE_KEY);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached?.timestamp && Array.isArray(cached?.data)) {
+            if (Date.now() - cached.timestamp < CONTACTS_CACHE_TTL) {
+              const normalizedContacts = cached.data.map((contact) => ({
+                ...contact,
+                status: normalizeContactStatus(contact.status),
+              }));
+              setContacts(normalizedContacts);
+              setFilteredContacts(normalizedContacts);
+              setTotalPages(Math.ceil(normalizedContacts.length / ITEMS_PER_PAGE));
+              const stats = {
+                total: normalizedContacts.length,
+                new: normalizedContacts.filter(c => c.status === "new").length,
+                inprogress: normalizedContacts.filter(c => c.status === "inprogress").length,
+                completed: normalizedContacts.filter(c => c.status === "completed").length,
+                responseTime: calculateAverageResponseTime(normalizedContacts)
+              };
+              setContactStats(stats);
+              setLoading(false);
+              setInitialLoading(false);
+              return;
+            }
+          }
+        }
+      } catch (e) { console.warn('Contacts cache read error:', e); }
+    }
+
     try {
       setLoading(true);
       setError(null);
       const response = await axios.get(`${API_BASE_URL}/api/contacts`, {
         headers: getAuthHeaders(),
       });
-      const normalizedContacts = (Array.isArray(response.data) ? response.data : []).map((contact) => ({
+      const rawData = Array.isArray(response.data) ? response.data : [];
+      sessionStorage.setItem(CONTACTS_CACHE_KEY, JSON.stringify({ data: rawData, timestamp: Date.now() }));
+      const normalizedContacts = rawData.map((contact) => ({
         ...contact,
         status: normalizeContactStatus(contact.status),
       }));
@@ -297,6 +333,7 @@ const AdminContacts = () => {
         { status: newStatus },
         { headers: { 'Content-Type': 'application/json', ...getAuthHeaders() } }
       );
+      sessionStorage.removeItem(CONTACTS_CACHE_KEY); // Invalidate cache after status change
     } catch (error) {
       console.error("Failed to update contact status:", error);
       // Revert on failure

@@ -6,6 +6,7 @@ const multer = require("multer");
 const twilio = require("twilio");
 const nodemailer = require("nodemailer");
 const PDFDocument = require("pdfkit");
+const compression = require("compression");
 
 const registerAdminRoutes = ({
   app,
@@ -28,6 +29,57 @@ const registerAdminRoutes = ({
     Employee,
     Expense,
   } = models;
+
+  // --- In-memory response cache with TTL, invalidation & cleanup ---
+  const responseCache = new Map();
+
+  const invalidateCache = (prefix) => {
+    for (const key of responseCache.keys()) {
+      if (key.startsWith(prefix)) {
+        responseCache.delete(key);
+      }
+    }
+  };
+
+  // Cleanup expired entries every 60 s
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of responseCache) {
+      if (entry.expiresAt <= now) responseCache.delete(key);
+    }
+  }, 60000);
+
+  const withResponseCache = (ttlMs = 30000) => {
+    return (req, res, next) => {
+      if (req.method !== "GET") { next(); return; }
+      if (req.query && req.query.forceRefresh === "true") { next(); return; }
+
+      const cacheKey = `${req.originalUrl}`;
+      const cached = responseCache.get(cacheKey);
+      const now = Date.now();
+
+      if (cached && cached.expiresAt > now) {
+        res.setHeader("X-Cache", "HIT");
+        res.setHeader("Cache-Control", "private, max-age=30");
+        res.status(cached.statusCode).json(cached.payload);
+        return;
+      }
+
+      const originalJson = res.json.bind(res);
+      res.json = (payload) => {
+        responseCache.set(cacheKey, {
+          statusCode: res.statusCode || 200,
+          payload,
+          expiresAt: Date.now() + ttlMs,
+        });
+        res.setHeader("X-Cache", "MISS");
+        res.setHeader("Cache-Control", "private, max-age=30");
+        return originalJson(payload);
+      };
+
+      next();
+    };
+  };
 
   const sendOrderStatusEmail = async (to, orderReference, status) => {
     if (!transporter) return;
@@ -70,7 +122,7 @@ const registerAdminRoutes = ({
     }
   };
 
-  app.get("/api/contacts", authenticateToken, async (req, res) => {
+  app.get("/api/contacts", authenticateToken, withResponseCache(30000), async (req, res) => {
     try {
       const contacts = await Contact.find({}).lean();
       res.status(200).json(contacts);
@@ -79,16 +131,32 @@ const registerAdminRoutes = ({
     }
   });
 
-  app.get("/api/users", authenticateToken, async (req, res) => {
+  app.get("/api/users", authenticateToken, withResponseCache(30000), async (req, res) => {
     try {
-      const users = await User.find({}, "email name createdAt").lean();
-      res.status(200).json(users);
+      const includeDemoUsers = req.query.includeDemo === "true";
+      const users = await User.find({}, "email name createdAt lastLogin phone address profileImage preferences").lean();
+
+      const isDemoUser = (user) => {
+        const email = String(user?.email || "").toLowerCase();
+        const name = String(user?.name || "").toLowerCase();
+
+        return (
+          email.endsWith("@tapacademy.com") ||
+          email.includes("+test") ||
+          email.startsWith("test") ||
+          name.includes("test user") ||
+          name.includes("demo user")
+        );
+      };
+
+      const filteredUsers = includeDemoUsers ? users : users.filter((user) => !isDemoUser(user));
+      res.status(200).json(filteredUsers);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch users", details: error.message });
     }
   });
 
-  app.get("/api/orders", authenticateToken, async (req, res) => {
+  app.get("/api/orders", authenticateToken, withResponseCache(15000), async (req, res) => {
     try {
       const orders = await Order.find({}).sort({ createdAt: -1 }).lean();
       res.status(200).json(orders);
@@ -98,7 +166,7 @@ const registerAdminRoutes = ({
     }
   });
 
-  app.get("/api/orders/admin/all", authenticateToken, async (req, res) => {
+  app.get("/api/orders/admin/all", authenticateToken, withResponseCache(15000), async (req, res) => {
     try {
       const orders = await Order.find({}).sort({ createdAt: -1 }).lean();
       res.status(200).json({
@@ -160,6 +228,9 @@ const registerAdminRoutes = ({
 
       await order.save();
 
+      // Invalidate orders cache after status change
+      invalidateCache("/api/orders");
+
       const userPhone = order.shippingInfo.phone;
       if (userPhone) {
         const smsMessage = `Hello ${order.userName || "Customer"}, your order with reference ${order.orderReference} is now ${status.toUpperCase()}. Thank you for shopping with us!`;
@@ -190,7 +261,7 @@ const registerAdminRoutes = ({
     }
   });
 
-  app.get("/api/notifications", authenticateToken, async (req, res) => {
+  app.get("/api/notifications", authenticateToken, withResponseCache(15000), async (req, res) => {
     try {
       const notifications = await Notification.find({})
         .sort({ read: 1, createdAt: -1 })
@@ -202,7 +273,7 @@ const registerAdminRoutes = ({
     }
   });
 
-  app.get("/api/admin/products", authenticateToken, async (req, res) => {
+  app.get("/api/admin/products", authenticateToken, withResponseCache(30000), async (req, res) => {
     try {
       const products = await Product.find().lean();
       res.json(products.map(formatProduct));
@@ -233,6 +304,7 @@ const registerAdminRoutes = ({
       });
 
       await newProduct.save();
+      invalidateCache("/api/admin/products");
       res.status(201).json({ message: "Product added successfully", product: formatProduct(newProduct) });
     } catch (err) {
       console.error("Error adding product:", err);
@@ -274,6 +346,7 @@ const registerAdminRoutes = ({
         throw new Error("Failed to update product");
       }
 
+      invalidateCache("/api/admin/products");
       res.json({
         success: true,
         message: "Product updated successfully",
@@ -298,6 +371,7 @@ const registerAdminRoutes = ({
       }
 
       await Product.findByIdAndDelete(id);
+      invalidateCache("/api/admin/products");
       res.json({
         success: true,
         message: "Product deleted successfully",
@@ -309,7 +383,7 @@ const registerAdminRoutes = ({
     }
   });
 
-  app.get("/api/tasks", authenticateToken, async (req, res) => {
+  app.get("/api/tasks", authenticateToken, withResponseCache(30000), async (req, res) => {
     try {
       const tasks = await Task.find().lean();
       res.json(tasks);
@@ -332,6 +406,7 @@ const registerAdminRoutes = ({
       });
 
       await newTask.save();
+      invalidateCache("/api/tasks");
       res.status(201).json({ message: "Task added successfully", task: newTask });
     } catch (err) {
       console.error("Error adding task:", err);
@@ -342,6 +417,9 @@ const registerAdminRoutes = ({
   app.put("/api/tasks/:id", authenticateToken, async (req, res) => {
     try {
       const { id } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ error: "Invalid task ID format" });
+      }
       const { title, priority, due, completed } = req.body;
 
       const updatedTask = await Task.findByIdAndUpdate(
@@ -354,6 +432,7 @@ const registerAdminRoutes = ({
         return res.status(404).json({ error: "Task not found" });
       }
 
+      invalidateCache("/api/tasks");
       res.json({ message: "Task updated successfully", task: updatedTask });
     } catch (err) {
       console.error("Update task error:", err);
@@ -364,12 +443,16 @@ const registerAdminRoutes = ({
   app.delete("/api/tasks/:id", authenticateToken, async (req, res) => {
     try {
       const { id } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ error: "Invalid task ID format" });
+      }
       const deletedTask = await Task.findByIdAndDelete(id);
 
       if (!deletedTask) {
         return res.status(404).json({ error: "Task not found" });
       }
 
+      invalidateCache("/api/tasks");
       res.json({ message: "Task deleted successfully", deletedId: id });
     } catch (err) {
       console.error("Delete task error:", err);
@@ -377,7 +460,7 @@ const registerAdminRoutes = ({
     }
   });
 
-  app.get("/api/employees", authenticateToken, async (req, res) => {
+  app.get("/api/employees", authenticateToken, withResponseCache(30000), async (req, res) => {
     try {
       const employees = await Employee.find().sort({ createdAt: -1 }).lean();
       res.json(employees);
@@ -394,6 +477,7 @@ const registerAdminRoutes = ({
       }
       const employee = new Employee({ name, email, phone, position, department, joiningDate, salary, address, status });
       await employee.save();
+      invalidateCache("/api/employees");
       res.status(201).json({ message: "Employee added", employee });
     } catch (err) {
       res.status(500).json({ error: "Failed to add employee", details: err.message });
@@ -406,6 +490,7 @@ const registerAdminRoutes = ({
       const update = req.body;
       const employee = await Employee.findByIdAndUpdate(id, update, { new: true, runValidators: true });
       if (!employee) return res.status(404).json({ error: "Employee not found" });
+      invalidateCache("/api/employees");
       res.json({ message: "Employee updated", employee });
     } catch (err) {
       res.status(500).json({ error: "Failed to update employee", details: err.message });
@@ -417,13 +502,14 @@ const registerAdminRoutes = ({
       const { id } = req.params;
       const employee = await Employee.findByIdAndDelete(id);
       if (!employee) return res.status(404).json({ error: "Employee not found" });
+      invalidateCache("/api/employees");
       res.json({ message: "Employee deleted", deletedId: id });
     } catch (err) {
       res.status(500).json({ error: "Failed to delete employee", details: err.message });
     }
   });
 
-  app.get("/api/expenses", authenticateToken, async (req, res) => {
+  app.get("/api/expenses", authenticateToken, withResponseCache(30000), async (req, res) => {
     try {
       const expenses = await Expense.find().sort({ date: -1 }).lean();
       res.json(expenses);
@@ -442,6 +528,7 @@ const registerAdminRoutes = ({
 
       const expense = new Expense({ title, amount, date });
       await expense.save();
+      invalidateCache("/api/expenses");
       res.status(201).json({ message: "Expense added successfully", expense });
     } catch (err) {
       res.status(500).json({ error: "Failed to add expense", details: err.message });
@@ -453,6 +540,7 @@ const registerAdminRoutes = ({
       const { id } = req.params;
       const expense = await Expense.findByIdAndDelete(id);
       if (!expense) return res.status(404).json({ error: "Expense not found" });
+      invalidateCache("/api/expenses");
       res.json({ message: "Expense deleted successfully", deletedId: id });
     } catch (err) {
       res.status(500).json({ error: "Failed to delete expense", details: err.message });
@@ -658,6 +746,7 @@ const twilioPhoneNumber = "+17756181167";
 const client = twilio(accountSid, authToken);
 
 app.use(express.json({ limit: "10mb" }));
+app.use(compression());
 
 const allowedOrigins = new Set([
   "https://ksp-gamma.vercel.app",

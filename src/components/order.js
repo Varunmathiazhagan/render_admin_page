@@ -33,6 +33,10 @@ import axios from "axios";
 import Navbar from "./Navbar";
 import { Bar, Line, Doughnut, Radar } from 'react-chartjs-2';
 import API_BASE_URL, { getAuthHeaders } from '../config';
+
+const ORDERS_CACHE_KEY = 'admin_orders_cache_v1';
+const ORDERS_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+
 import { 
   Chart as ChartJS, 
   CategoryScale, 
@@ -840,13 +844,31 @@ const AdminOrdersPage = () => {
   const API_URL = API_BASE_URL;
 
   // Fetch orders from the server
-  const fetchOrders = async () => {
+  const fetchOrders = async (forceRefresh = false) => {
+    // Try session cache first
+    if (!forceRefresh) {
+      try {
+        const cachedRaw = sessionStorage.getItem(ORDERS_CACHE_KEY);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached?.timestamp && Array.isArray(cached?.data)) {
+            if (Date.now() - cached.timestamp < ORDERS_CACHE_TTL) {
+              setOrders(cached.data.map(o => ({ ...o, createdAt: new Date(o.createdAt), updatedAt: o.updatedAt ? new Date(o.updatedAt) : null })));
+              fetchCustomers();
+              setLoading(false);
+              return;
+            }
+          }
+        }
+      } catch (e) { console.warn('Orders cache read error:', e); }
+    }
+
     setLoading(true);
     setError(null);
 
     try {
       const response = await axios.get(`${API_URL}/api/orders/admin/all`, {
-        timeout: 15008,
+        timeout: 15000,
         headers: getAuthHeaders(),
       });
 
@@ -861,6 +883,7 @@ const AdminOrdersPage = () => {
       }));
 
       setOrders(formattedOrders);
+      sessionStorage.setItem(ORDERS_CACHE_KEY, JSON.stringify({ data: response.data.orders, timestamp: Date.now() }));
       
       // Also fetch customers for enhanced order details
       fetchCustomers();
@@ -923,6 +946,7 @@ const AdminOrdersPage = () => {
   
       if (response.data.success) {
         const updatedOrder = response.data.order;
+        sessionStorage.removeItem(ORDERS_CACHE_KEY); // Invalidate cache after status change
   
         // Update the orders state
         setOrders((prevOrders) =>
